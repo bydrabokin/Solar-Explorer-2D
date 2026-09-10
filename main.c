@@ -20,7 +20,7 @@ bool orbiting, mousePressed, options, calendarToggle, planetsUI, moved, only, or
 
 double DT = 0.01;
 double zoomFactorInit;
-double zoomFactor;
+double zoomFactor, minRadius;
 double elapsedSeconds, seconds1000Years;
 int celestialNum, targetFps;
 int started;
@@ -40,7 +40,7 @@ Vector2 cursorPos;
 Vector2 points[600];
 Vector2 orbitsDraw[10][10000]; 
 Vector2 deltaWorld;
-Rectangle pauseButton, previousButton, nextButton, optionsButton, planetsButton, calendarButton, rocketButton, support, support2;
+Rectangle pauseButton, previousButton, nextButton, optionsButton, planetsButton, calendarButton, rocketButton, support, support2, support3;
 
 typedef struct {
     bool on;
@@ -53,8 +53,6 @@ typedef struct {
     double roundness;
     Vector2 extra;
 } Button;
-
-
 
 Button physicalProperties, atmosphericProperties,  orbitalProperties, derivedValues, orbitTrailsButton;
 
@@ -95,10 +93,59 @@ typedef struct  {
 
 } Planet;
 
-
 Planet sun, mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, pluto;
 Planet *celestialBodies[10];
 
+typedef struct {
+    Rectangle gray;
+    Vector2 ball;
+    double radius;
+    Rectangle blue;
+    char name[128];
+    double value;
+    double min, max; 
+    Vector2 textRect;
+    double *affects; // affects = moon
+    double extra;
+    bool log;
+
+} Slider;
+
+Slider epsilonSlider, minRadiusSlider;
+
+void manageSlider(Slider *theslider) {
+
+    if (theslider == &epsilonSlider && !orbitsToggle) return;
+    else if (orbitsToggle) DrawTextPro(monocraft, "*May cause lag at low numbers", (Vector2){20, 350}, (Vector2){0, 0}, 0, 15, 1, GRAY);
+
+    if (theslider->log) theslider->blue.width = (log(*theslider->affects) - log(theslider->min)) / (log(theslider->max) - log(theslider->min)) * theslider->gray.width;
+    else theslider->blue.width = (*theslider->affects - theslider->min) / (theslider->max - theslider->min) * theslider->gray.width;
+    
+    theslider->ball = (Vector2){theslider->blue.x+theslider->blue.width, theslider->blue.y + theslider->blue.height/2};
+    DrawRectangle(theslider->gray.x, theslider->gray.y, theslider->gray.width, theslider->gray.height, DARKGRAY);
+    DrawRectangle(theslider->blue.x, theslider->blue.y, theslider->blue.width, theslider->blue.height, BLUE);
+    DrawCircle(theslider->ball.x, theslider->ball.y, theslider->radius, WHITE);
+    DrawTextEx(timesNewRoman, theslider->name, theslider->textRect, 30, 1, WHITE);
+    
+    char value[32];
+    snprintf(value, 32, "%.4g", *theslider->affects);
+    DrawTextEx(timesNewRoman, value, (Vector2){theslider->textRect.x+theslider->extra, theslider->textRect.y}, 30, 1, WHITE);
+
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointCircle(GetMousePosition(), theslider->ball, theslider->radius+5)) {
+        theslider->ball.x = GetMousePosition().x;
+        
+        double normalized = (GetMousePosition().x - theslider->gray.x) / (double)theslider->gray.width;
+        if (theslider->log) *theslider->affects = theslider->min * pow(theslider->max / theslider->min, normalized);
+        else *theslider->affects = theslider->min + normalized * (theslider->max - theslider->min);
+
+
+        if (*theslider->affects > theslider->max) *theslider->affects = theslider->max;
+        if (*theslider->affects < theslider->min) *theslider->affects = theslider->min;
+
+        
+
+    }
+}
 
 void setInitialData() {
     sun = (Planet){
@@ -449,6 +496,38 @@ void setButtons() {
 
 }
 
+void setSliders() {
+    epsilonSlider = (Slider){
+        .name = "Orbit Line Accuracy = ",
+        .gray = (Rectangle){20, 320, 300, 20},
+        .textRect = {20, 280},
+        .ball = {400, 50},
+        .radius = 15,
+        .affects = &epsilon,
+        .blue = (Rectangle){20, 320, 150, 20},
+        .value = 0.0005,
+        .min = 0.0008,
+        .max = 0.05,
+        .extra = 260,
+        .log = true
+    };
+
+    minRadiusSlider = (Slider){
+        .name = "Min radius = ",
+        .gray = (Rectangle){20, 420, 300, 20},
+        .textRect = {20, 380},
+        .ball = {400, 50},
+        .radius = 15,
+        .affects = &minRadius,
+        .blue = (Rectangle){20, 420, 150, 20},
+        .value = 8,
+        .min = 1,
+        .max = 20,
+        .extra = 160,
+        .log = false
+    };
+}
+
 void setInitialPos(Planet *planet[]) {
     for (int i = 0; i <= celestialNum; i++) {
         planet[i]->pos.x = cosf(planet[i]->initialAngle * DEG2RAD) * planet[i]->initialDistance;
@@ -476,7 +555,6 @@ void movePlanet(Planet *planet[]) {
 void drawPlanet(Planet *planet[], Font font) {
     for (int i = 0; i <= celestialNum; i++) {
         
-        double minRadius = 8;
         if (planet[i]->drawRadius < minRadius)  {
             DrawCircle(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius-1, BLACK);
             DrawCircleLines(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius, planet[i]->color);
@@ -981,6 +1059,9 @@ void applyEscapeVelocity(Planet *planet) {
 
 void planetSelection(Planet *planet[]) {
     
+    support3 = (Rectangle){-300, 130, 670, 660};
+    DrawRectangleRounded((Rectangle)support3, 0.6, 50, (Color){0, 0, 0, 160});
+    
     if (rocketToggle) {
         DrawTextEx(timesNewRoman, "BIG PUSH", (Vector2){15, 140}, 35, 1, WHITE);
         DrawTextEx(timesNewRoman, "Apply Escape velocity to ->", (Vector2){15, 200}, 35, 1, WHITE);
@@ -1239,11 +1320,18 @@ void setOptions() {
     DrawTextPro(monocraft, "*Press R to restart", (Vector2){20, 867}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     DrawTextPro(monocraft, "*Press SPACE to pause simulation", (Vector2){20, 882}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     
+    support3 = (Rectangle){-300, 130, 670, 400};
+    DrawRectangleRounded((Rectangle)support3, 0.6, 50, (Color){0, 0, 0, 160});
+    
     DrawTextEx(timesNewRoman, "OPTIONS", (Vector2){15, 140}, 35, 1, WHITE);
     drawButton(&orbitTrailsButton);
 
+    manageSlider(&epsilonSlider);
+    manageSlider(&minRadiusSlider);
+
     
 }
+
 int main() {
     
     //flags
@@ -1256,7 +1344,6 @@ int main() {
     calendarToggle = false; 
     rocketToggle = false;
 
-    
     zoomFactor = 1e-9;
     
     framesTicked = 0;
@@ -1265,6 +1352,7 @@ int main() {
     epsilon = 0.004;
     planetgoingTo = 0;
     celestialNum = 9;
+    minRadius = 8;
     
     char date[100];
     char rateString[128];
@@ -1287,6 +1375,7 @@ int main() {
     loadFiles();
     setInitialData();
     setButtons();
+    setSliders();
     getDate(DT, framesTicked, date);
     getRate(DT, rateString, orbiting);
     generateSliderFunct();
@@ -1311,10 +1400,9 @@ int main() {
             support = (Rectangle){1300, 0, 1000, 900};
         }
         
-        //Input
-        
         support2 = (Rectangle){580, 720, 640, 300};
-
+        
+        //Input
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT) ) {
             if (CheckCollisionPointRec(GetMousePosition(), (Rectangle)nextButton) || IsKeyPressed(KEY_RIGHT)) {
                 DT = jumpRate(DT, true);
@@ -1375,7 +1463,7 @@ int main() {
 
         } else if (mousePressed) {
             cursorPos.y = GetMousePosition().y;
-            if (!CheckCollisionPointRec(GetMousePosition(), (Rectangle)support2) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support) ) {
+            if (!CheckCollisionPointRec(GetMousePosition(), (Rectangle)support2) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support3) ) {
                 deltaWorld.x += GetMouseDelta().x / zoomFactor;
                 deltaWorld.y += GetMouseDelta().y / zoomFactor;
                 movePlanet(celestialBodies);
@@ -1430,7 +1518,7 @@ int main() {
         snprintf(fps, 16, "%d", GetFPS());
         
         if (options) setOptions();
-        
+        else support3 = (Rectangle){0, 0, 0, 0};
         DrawTextPro(monocraft, date, (Vector2){20, 10}, (Vector2){0, 0}, 0, 30, 1, WHITE);
         
         
@@ -1487,7 +1575,6 @@ int main() {
 
         DrawText(fps, 1760, 860, 24, WHITE);
         
-    
 
         EndDrawing();
 
