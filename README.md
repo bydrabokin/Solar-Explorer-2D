@@ -8,4 +8,9 @@ It is a passion project and an introduction to a much larger 3D solar system tha
 # Images
 
 # Installation guide
-## Build from source:
+**Build from source:**
+
+**Linux**
+- Run the executable.
+**Winodws**
+- Run the executable.

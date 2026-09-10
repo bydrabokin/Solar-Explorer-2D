@@ -11,6 +11,7 @@
 #define StefanBoltzmannConstant 5.670374e-8
 #define R 8.314
 #define rocheLimitConstant 2.44
+#define dateSeconds 6696000
 
 Texture2D raptor, calendarIcon, solarSystem, sunTexture, sunWeather, sunText, mercuryTexture, mercuryWeather, mercuryText, venusTexture, venusWeather, venusText, earthTexture, earthWeather, earthText, marsTexture, marsWeather, marsText, jupiterTexture, jupiterWeather, jupiterText, saturnTexture, saturnWeather, saturnText, uranusTexture, uranusWeather, uranusText, neptuneTexture, neptuneWeather, neptuneText, plutoTexture, plutoWeather, plutoText;
 Font monocraft, timesNewRoman;
@@ -74,7 +75,7 @@ typedef struct  {
     double rotationPeriod;
     double axialTilt, inclination;
     double averageDistance;
-    double escapeVelocity, netVelocity;
+    double escapeVelocity, escapeVelocityPlanet, netVelocity;
     double r;
     double blackBodyEquilibrium, bondAlbedo, solarIrradiance;
     double hillSphereRadius, sphereOfInfluenceRadius;
@@ -423,7 +424,7 @@ void setButtons() {
 
     atmosphericProperties = (Button){
         .inside = (Rectangle){1550, 375, 220, 40},
-        .name = "Atmospheric timesNewRomanProperties",
+        .name = "Atmospheric Properties",
         .font = timesNewRoman,
         .fontSize = 22,
         .on = false,
@@ -442,7 +443,7 @@ void setButtons() {
         .on = true,
         .roundness = 0.4,
         .extra = (Vector2){23, 10},
-        .inside = (Rectangle){20, 140, 200, 50}
+        .inside = (Rectangle){20, 200, 200, 50}
     };
 
 
@@ -750,10 +751,11 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
         planet[j]->density = planet[j]->mass / (4.0/3.0 *PI*planet[j]->radius*planet[j]->radius*planet[j]->radius);
         planet[j]->surfaceGravity = G * planet[j]->mass / ((double)planet[j]->radius * planet[j]->radius);
         planet[j]->orbitalPeriod = 2 * PI * sqrtf((planet[j]->semiMajorAxis*planet[j]->semiMajorAxis*planet[j]->semiMajorAxis)/sun.gravitationalParameter);
-        
+        planet[j]->escapeVelocity = sqrtf((2*G*sun.mass)/planet[j]->r);
+
         if (physicalProperties.on) {
             
-            planet[j]->escapeVelocity = sqrtf((2*G*planet[j]->mass)/planet[j]->radius);
+            planet[j]->escapeVelocityPlanet = sqrtf((2*G*planet[j]->mass)/planet[j]->radius);
             snprintf(massString, 64, "Mass: %g kg", planet[j]->mass);
             snprintf(radiusString, 64, "Radius: %.0f m", planet[j]->radius);
             snprintf(meanDensityString, 64, "Mean Density: %.2f kg/m^3",planet[j]->density);
@@ -761,7 +763,7 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
             snprintf(rotationPeriodString, 64, "Rotation Period: %.2f h",planet[j]->rotationPeriod/3600);
             snprintf(axialTiltString, 64, "Axial Tilt: %.2f degrees",planet[j]->axialTilt);
             snprintf(averageDistanceString, 64, "Average Distance: %.2f AU",planet[j]->averageDistance/AU);
-            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[j]->escapeVelocity/1000.0);
+            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[j]->escapeVelocityPlanet/1000.0);
             snprintf(gravitationalParameterString, 64, "Gravitational Parameter: %.2e", planet[j]->gravitationalParameter);            
 
 
@@ -835,7 +837,6 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
         }
         
         else if (orbitalProperties.on) {
-            planet[j]->escapeVelocity = sqrtf((2*G*sun.mass)/planet[j]->r);
             planet[j]->semiMinorAxis = planet[j]->semiMajorAxis * sqrtf(1 - planet[j]->eccentricity*planet[j]->eccentricity);
             planet[j]->perihelion = planet[j]->semiMajorAxis * (1 - planet[j]->eccentricity);
             planet[j]->aphelion = planet[j]->semiMajorAxis * (1 + planet[j]->eccentricity);
@@ -962,15 +963,39 @@ void drawOrbitTrails() {
     }
 }
 
+void applyEscapeVelocity(Planet *planet) {
+
+    double dx, dy;
+    dx = planet->pos.x - sun.pos.x;
+    dy = planet->pos.y - sun.pos.y; 
+    planet->r = sqrtf(dx*dx + dy*dy);
+
+    planet->escapeVelocity = sqrtf((2*G*sun.mass)/planet->r);
+
+    planet->velocity.x = planet->escapeVelocity * (planet->velocity.x/planet->netVelocity);
+    planet->velocity.y = planet->escapeVelocity * (planet->velocity.y/planet->netVelocity);
+
+
+
+}
+
 void planetSelection(Planet *planet[]) {
-    DrawTextEx(timesNewRoman, "Select Celestial Object ->", (Vector2){15, 130}, 35, 1, WHITE);
+    
+    if (rocketToggle) {
+        DrawTextEx(timesNewRoman, "BIG PUSH", (Vector2){15, 140}, 35, 1, WHITE);
+        DrawTextEx(timesNewRoman, "Apply Escape velocity to ->", (Vector2){15, 200}, 35, 1, WHITE);
+    } else {
+        DrawTextEx(timesNewRoman, "FOLLOW AROUND", (Vector2){15, 140}, 35, 1, WHITE);
+        DrawTextEx(timesNewRoman, "Select Celestial Object ->", (Vector2){15, 200}, 35, 1, WHITE);
+    }
 
-    for (int i = 0; i <= celestialNum; i++) {
-        int row = i%3;
-        int column = i/3;
+    int start = (rocketToggle) ? 1:0;
 
-        //DrawRectangle(25+row*100, 200+120*column, 75, 75, planet[i]->color);
-        DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){25+row*100, 200+120*column, 75, (int)(75.0 / planet[i]->texture.width * planet[i]->texture.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
+    for (int i = start; i <= celestialNum; i++) {
+        int row = (i-start)%3;
+        int column = (i-start)/3;
+
+        DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){25+row*100, 270+120*column, 75, (int)(75.0 / planet[i]->texture.width * planet[i]->texture.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
         
         int extra = 0;
         if (planet[i] == &sun) extra = 10;
@@ -979,32 +1004,38 @@ void planetSelection(Planet *planet[]) {
         else if (planet[i] == &mars) extra = 8;
         else if (planet[i] == &pluto) extra = 3;
 
-        DrawTextEx(monocraft, planet[i]->name, (Vector2){40+row*100 + extra, 280+120*column}, 15, 1, WHITE);
-
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){25+row*100, 200+120*column, 75, 75})) {
-            planetSelected = i+1;
-            planetgoingTo = i+1;
-            only = false;
-        }
-    }
-
-    DrawTexturePro(solarSystem, (Rectangle){0, 0, solarSystem.width, solarSystem.height}, (Rectangle){125, 560, 75, (int)(75.0 / solarSystem.width * solarSystem.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
-    DrawLineEx((Vector2){225, 560}, (Vector2){300, 635}, 4, GRAY);
-    DrawLineEx((Vector2){225, 635}, (Vector2){300, 560}, 4, GRAY);
-    DrawTextEx(monocraft, "Solar System", (Vector2){115, 640}, 15, 1, WHITE);
-    DrawTextEx(monocraft, "Stop", (Vector2){250, 640}, 15, 1, WHITE);
-
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){125, 560, 75, 75})) {
-        planetSelected = 0;
-        planetgoingTo = 1;
-        only = true;
-    } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){225, 560, 75, 75})) {
-        planetSelected = 0;
-        planetgoingTo = 0;
-    }
-
+        DrawTextEx(monocraft, planet[i]->name, (Vector2){40+row*100 + extra, 350+120*column}, 15, 1, WHITE);
 
     
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){25+row*100, 270+120*column, 75, 75})) {
+            if (planetsUI) { 
+                planetSelected = i+1;
+                planetgoingTo = i+1;
+                only = false;
+            } else {
+                applyEscapeVelocity(celestialBodies[i]);
+            }
+        } 
+    }
+
+    if (planetsUI) {
+
+        DrawTexturePro(solarSystem, (Rectangle){0, 0, solarSystem.width, solarSystem.height}, (Rectangle){125, 630, 75, (int)(75.0 / solarSystem.width * solarSystem.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
+        DrawLineEx((Vector2){225, 630}, (Vector2){300, 705}, 4, GRAY);
+        DrawLineEx((Vector2){225, 705}, (Vector2){300, 630}, 4, GRAY);
+        DrawTextEx(monocraft, "Solar System", (Vector2){115, 710}, 15, 1, WHITE);
+        DrawTextEx(monocraft, "Stop", (Vector2){250, 710}, 15, 1, WHITE);
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){125, 630, 75, 75})) {
+            planetSelected = 0;
+            planetgoingTo = 1;
+            only = true;
+        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){225, 630, 75, 75})) {
+            planetSelected = 0;
+            planetgoingTo = 0;
+        }
+
+    }
 }
 
 void buttons() {
@@ -1149,15 +1180,11 @@ void teleport() {
 
                 if (zoomFactor > 1e-4) {
                     zoomFactor *= 0.95;
-                    printf("zoomFactor = %.12g, factor = %.2f, radius BEFORE = %.6f\n", zoomFactor, zoomFactor > 1e-4 ? 0.95 : 1.05, celestialBodies[planetgoingTo-1]->drawRadius);
                     adjust(celestialBodies, 0.95);
-                    printf("radius AFTER = %.6f\n",celestialBodies[planetgoingTo-1]->drawRadius);
 
                 } else {
                     zoomFactor *= 1.05;
-                    printf("zoomFactor = %.12g, factor = %.2f, radius BEFORE = %.6f\n", zoomFactor, zoomFactor > 1e-4 ? 0.95 : 1.05, celestialBodies[planetgoingTo-1]->drawRadius);
                     adjust(celestialBodies, 1.05);
-                    printf("radius AFTER = %.6f\n",celestialBodies[planetgoingTo-1]->drawRadius);
                 }
             } else {
                 planetgoingTo = 0;
@@ -1206,7 +1233,17 @@ void setColors() {
 
 }
 
+void setOptions() {
+    
+    DrawTextPro(monocraft, "*Click a planet to follow/zoom in", (Vector2){20, 852}, (Vector2){0, 0}, 0, 15, 1, GRAY);
+    DrawTextPro(monocraft, "*Press R to restart", (Vector2){20, 867}, (Vector2){0, 0}, 0, 15, 1, GRAY);
+    DrawTextPro(monocraft, "*Press SPACE to pause simulation", (Vector2){20, 882}, (Vector2){0, 0}, 0, 15, 1, GRAY);
+    
+    DrawTextEx(timesNewRoman, "OPTIONS", (Vector2){15, 140}, 35, 1, WHITE);
+    drawButton(&orbitTrailsButton);
 
+    
+}
 int main() {
     
     //flags
@@ -1223,7 +1260,7 @@ int main() {
     zoomFactor = 1e-9;
     
     framesTicked = 0;
-    elapsedSeconds = 6696000;
+    elapsedSeconds = dateSeconds;
     seconds1000Years = 1000.0 * 365.25 * 24.0 * 60.0 * 60.0;    
     epsilon = 0.004;
     planetgoingTo = 0;
@@ -1309,8 +1346,13 @@ int main() {
             zoomFactor = 1e-9;
             setInitialData();
             setInitialPos(celestialBodies);
-            orbiting = false;
+            
             DT = 0.01;
+            orbiting = true;
+            elapsedSeconds = dateSeconds;
+            getDate(DT, 11, date);
+            orbiting = false;
+            
             cursorPos.x = 900;
             deltaWorld = (Vector2){0, 0};
         }  
@@ -1387,15 +1429,7 @@ int main() {
         char fps[16];
         snprintf(fps, 16, "%d", GetFPS());
         
-        
-        if (options) {
-            drawButton(&orbitTrailsButton);
-            DrawTextPro(monocraft, "*Click a planet to follow/zoom in", (Vector2){20, 852}, (Vector2){0, 0}, 0, 15, 1, GRAY);
-            DrawTextPro(monocraft, "*Press R to restart", (Vector2){20, 867}, (Vector2){0, 0}, 0, 15, 1, GRAY);
-            DrawTextPro(monocraft, "*Press SPACE to pause simulation", (Vector2){20, 882}, (Vector2){0, 0}, 0, 15, 1, GRAY);
-        }
-        
-        
+        if (options) setOptions();
         
         DrawTextPro(monocraft, date, (Vector2){20, 10}, (Vector2){0, 0}, 0, 30, 1, WHITE);
         
@@ -1422,7 +1456,7 @@ int main() {
 
         
         
-        if (planetsUI) {
+        if (planetsUI || rocketToggle) {
             planetSelection(celestialBodies);
         }
         
