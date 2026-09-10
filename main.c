@@ -16,7 +16,7 @@
 Texture2D raptor, calendarIcon, solarSystem, sunTexture, sunWeather, sunText, mercuryTexture, mercuryWeather, mercuryText, venusTexture, venusWeather, venusText, earthTexture, earthWeather, earthText, marsTexture, marsWeather, marsText, jupiterTexture, jupiterWeather, jupiterText, saturnTexture, saturnWeather, saturnText, uranusTexture, uranusWeather, uranusText, neptuneTexture, neptuneWeather, neptuneText, plutoTexture, plutoWeather, plutoText;
 Font monocraft, timesNewRoman;
 Color blue1, blue2, red1, red2, orange1, orange2, purple1, purple2, green1, green2, verydarkgray, darkRed, drakGreen, red, green, blue, lightBlue;
-bool orbiting, mousePressed, options, calendarToggle, planetsUI, moved, only, orbitsToggle, rocketToggle;
+bool orbiting, mousePressed, options, calendarToggle, planetsUI, moved, only, orbitsToggle, rocketToggle, planetRotation;
 
 double DT = 0.01;
 double zoomFactorInit;
@@ -54,7 +54,7 @@ typedef struct {
     Vector2 extra;
 } Button;
 
-Button physicalProperties, atmosphericProperties,  orbitalProperties, derivedValues, orbitTrailsButton;
+Button physicalProperties, atmosphericProperties,  orbitalProperties, derivedValues, orbitTrailsButton, periodButton;
 
 
 typedef struct  {
@@ -445,6 +445,18 @@ void setButtons() {
         .extra = (Vector2){13, 8}
     };
 
+    periodButton = (Button){
+        .inside = (Rectangle){20, 475, 300, 50},
+        .name = "Planet's own rotation",
+        .font = timesNewRoman,
+        .fontSize = 35,
+        .on = true,
+        .roundness = 0.4,
+        .colorInside = green1,
+        .colorBorder = green2,
+        .extra = (Vector2){13, 8}
+    };
+
     derivedValues = (Button){
         .inside = (Rectangle){1550, 320, 220, 40},
         .name = "Derived Values",
@@ -553,14 +565,16 @@ void movePlanet(Planet *planet[]) {
 }
 
 void drawPlanet(Planet *planet[], Font font) {
+
     for (int i = 0; i <= celestialNum; i++) {
         
+        int degrees = (planetRotation) ? (int)(elapsedSeconds / planet[i]->rotationPeriod * 360.0+90) % 360 : 0;        
         if (planet[i]->drawRadius < minRadius)  {
             DrawCircle(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius-1, BLACK);
-            DrawCircleLines(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius, planet[i]->color);
+            DrawCircleLines(planet[i]->drawPos.x-planet[i]->drawRadius, planet[i]->drawPos.y-planet[i]->drawRadius, minRadius, planet[i]->color);
         }
 
-        DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){planet[i]->drawPos.x - planet[i]->drawRadius, planet[i]->drawPos.y - planet[i]->drawRadius, 2*planet[i]->drawRadius, 2*planet[i]->drawRadius}, (Vector2){0, 0}, 0.0, RAYWHITE);
+        DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){planet[i]->drawPos.x - planet[i]->drawRadius, planet[i]->drawPos.y - planet[i]->drawRadius, 2*planet[i]->drawRadius, 2*planet[i]->drawRadius}, (Vector2){planet[i]->drawRadius, planet[i]->drawRadius}, degrees, RAYWHITE);
         
         if (planet[i]->drawRadius < 10) {
             DrawTextPro(font, planet[i]->name, (Vector2){planet[i]->drawPos.x-(int)(strlen(planet[i]->name) *4), planet[i]->drawPos.y-25}, (Vector2){0, 0}, 0, 15, 1, WHITE);
@@ -723,11 +737,18 @@ void drawButton(Button *button) {
         button->on = true;
     }
 
+    if (planetRotation) {
+        periodButton.colorInside = green2;
+        periodButton.colorBorder = green1;
+    } else {
+        periodButton.colorInside = red2;
+        periodButton.colorBorder = red1;
+    }
     DrawRectangleRounded(button->inside, button->roundness, 20, colorInside);
     DrawRectangleRoundedLinesEx(button->inside, button->roundness, 20, 3, colorBorder);
     DrawTextEx(button->font, button->name, (Vector2){button->inside.x+button->extra.x, button->inside.y+button->extra.y}, button->fontSize, 1, WHITE);
 
-    if (button->on && button != &orbitTrailsButton) DrawTextEx(button->font, button->name, (Vector2){1350, 435}, button->fontSize+15, 1, (Color){(button->colorInside.r +255)/2, (button->colorInside.g +255)/2, (button->colorInside.b +255)/2, 255});
+    if (button->on && button != &orbitTrailsButton && button != &periodButton) DrawTextEx(button->font, button->name, (Vector2){1350, 435}, button->fontSize+15, 1, (Color){(button->colorInside.r +255)/2, (button->colorInside.g +255)/2, (button->colorInside.b +255)/2, 255});
 
 
 }
@@ -1154,6 +1175,8 @@ void buttons() {
         options = false;   
         planetsUI = false; 
         calendarToggle = false;
+    } if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), periodButton.inside)) {
+        planetRotation = !planetRotation;
     }
 
 
@@ -1200,8 +1223,11 @@ void buttons() {
 } 
 
 void teleport() {
+
     
     if (planetgoingTo != 0) {
+        double diffX = celestialBodies[planetgoingTo-1]->drawPos.x - celestialBodies[planetgoingTo-1]->drawRadius - SCREEN_HALF_X;
+        double diffY = celestialBodies[planetgoingTo-1]->drawPos.y - celestialBodies[planetgoingTo-1]->drawRadius - SCREEN_HALF_Y;
         if (zoomFactor != 1e-9 && moved == false) {
             if (round(zoomFactor*1e10) == 10) {
                 double value = zoomFactor / 1e-9;
@@ -1216,39 +1242,12 @@ void teleport() {
                 adjust(celestialBodies, 1.05);
             }
 
-        } else if ((fabs(celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X) >= 0.05 || fabs(celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y) >= 0.05) && !moved) {
-            Vector2 delta;
-            
-            if (round((celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X)) == 0) {
-                delta.x = -(celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X);
-            } else if ((round((celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X)/5)) == 0) {
-                if ((celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X) > 0) {
-                    delta.x = -1;
-                } else {
-                    delta.x = 1;
-                }
-            } else if ((celestialBodies[planetgoingTo-1]->drawPos.x-SCREEN_HALF_X) > 0) {
-                delta.x = -5;
-            } else {
-                delta.x = 5;
-            }
-            
-            if (round((celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y)) == 0) {
-                delta.y = -(celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y);
-            } else if (round(((celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y)/5)) == 0) {
-                if ((celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y) > 0) {
-                    delta.y = -1;
-                } else {
-                    delta.y = 1;
-                }
-            } else if ((celestialBodies[planetgoingTo-1]->drawPos.y-SCREEN_HALF_Y) > 0) {
-                delta.y = -5;   
-            } else {
-                delta.y = 5;
-            }
-            
+        } else if ((fabs(diffX) > 0.05 || fabs(diffY) > 0.05) && !moved) {
+            Vector2 delta = {fmax(-5.0, fmin(5.0, -diffX)), fmax(-5.0, fmin(5.0, -diffY))};
+
             deltaWorld.x += delta.x / zoomFactor;
             deltaWorld.y += delta.y / zoomFactor;
+
             movePlanet(celestialBodies);
 
         } else if (celestialBodies[planetgoingTo-1] == &pluto ? (pluto.drawRadius < 100 || pluto.drawRadius > 300) : (celestialBodies[planetgoingTo-1]->drawRadius < 200 || celestialBodies[planetgoingTo-1]->drawRadius > 300)) {
@@ -1324,6 +1323,7 @@ void setOptions() {
     DrawRectangleRounded((Rectangle)support3, 0.6, 50, (Color){0, 0, 0, 160});
     
     DrawTextEx(timesNewRoman, "OPTIONS", (Vector2){15, 140}, 35, 1, WHITE);
+    drawButton(&periodButton);
     drawButton(&orbitTrailsButton);
 
     manageSlider(&epsilonSlider);
@@ -1343,6 +1343,7 @@ int main() {
     planetsUI = false;
     calendarToggle = false; 
     rocketToggle = false;
+    planetRotation = true;
 
     zoomFactor = 1e-9;
     
