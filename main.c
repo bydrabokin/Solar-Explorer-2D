@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 #define SCREEN_HALF_X 900
 #define SCREEN_HALF_Y 450
 #define AU 1.496e+11
@@ -22,6 +23,7 @@ double DT = 0.01;
 double zoomFactorInit;
 double zoomFactor, minRadius;
 double elapsedSeconds, seconds1000Years;
+int64_t selectedSeconds;
 int celestialNum, targetFps;
 int started;
 int numPoints;
@@ -54,7 +56,7 @@ typedef struct {
     Vector2 extra;
 } Button;
 
-Button physicalProperties, atmosphericProperties,  orbitalProperties, derivedValues, orbitTrailsButton, periodButton;
+Button physicalProperties, atmosphericProperties,  orbitalProperties, derivedValues, orbitTrailsButton, periodButton, jumpButton;
 
 
 typedef struct  {
@@ -112,6 +114,11 @@ typedef struct {
 } Slider;
 
 Slider epsilonSlider, minRadiusSlider;
+
+typedef struct {
+    Rectangle rect;
+    int64_t add;
+} LittleButton;
 
 void manageSlider(Slider *theslider) {
 
@@ -457,6 +464,18 @@ void setButtons() {
         .extra = (Vector2){13, 8}
     };
 
+    jumpButton = (Button){
+        .inside = (Rectangle){40, 475, 240, 50},
+        .name = "Jump to date!",
+        .font = timesNewRoman,
+        .fontSize = 35,
+        .on = true,
+        .roundness = 0.4,
+        .colorInside = purple2,
+        .colorBorder = purple1,
+        .extra = (Vector2){28, 8}
+    };
+
     derivedValues = (Button){
         .inside = (Rectangle){1550, 320, 220, 40},
         .name = "Derived Values",
@@ -748,7 +767,7 @@ void drawButton(Button *button) {
     DrawRectangleRoundedLinesEx(button->inside, button->roundness, 20, 3, colorBorder);
     DrawTextEx(button->font, button->name, (Vector2){button->inside.x+button->extra.x, button->inside.y+button->extra.y}, button->fontSize, 1, WHITE);
 
-    if (button->on && button != &orbitTrailsButton && button != &periodButton) DrawTextEx(button->font, button->name, (Vector2){1350, 435}, button->fontSize+15, 1, (Color){(button->colorInside.r +255)/2, (button->colorInside.g +255)/2, (button->colorInside.b +255)/2, 255});
+    if (button->on && button != &orbitTrailsButton && button != &periodButton && button != &jumpButton) DrawTextEx(button->font, button->name, (Vector2){1350, 435}, button->fontSize+15, 1, (Color){(button->colorInside.r +255)/2, (button->colorInside.g +255)/2, (button->colorInside.b +255)/2, 255});
 
 
 }
@@ -1319,7 +1338,7 @@ void setOptions() {
     DrawTextPro(monocraft, "*Press R to restart", (Vector2){20, 867}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     DrawTextPro(monocraft, "*Press SPACE to pause simulation", (Vector2){20, 882}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     
-    support3 = (Rectangle){-300, 130, 670, 400};
+    support3 = (Rectangle){-300, 130, 685, 420};
     DrawRectangleRounded((Rectangle)support3, 0.6, 50, (Color){0, 0, 0, 160});
     
     DrawTextEx(timesNewRoman, "OPTIONS", (Vector2){15, 140}, 35, 1, WHITE);
@@ -1330,7 +1349,95 @@ void setOptions() {
     manageSlider(&minRadiusSlider);
 
     
+    
 }
+
+void calendarUI() {
+
+    support3 = (Rectangle){-300, 115, 685, 435};
+    DrawRectangleRounded((Rectangle)support3, 0.4, 50, (Color){0, 0, 0, 160});
+    
+    DrawTextEx(timesNewRoman, "CALENDAR WARPING", (Vector2){15, 140}, 35, 1, WHITE);
+    DrawTextEx(timesNewRoman, "Select Date:", (Vector2){15, 200}, 35, 1, WHITE);
+    
+    DrawTextEx(monocraft,  " ^  ^^  ^^^^", (Vector2){40, 260}, 35, 1, WHITE);
+    DrawTextPro(monocraft, "^^^^  ^^  ^ ", (Vector2){259, 340}, (Vector2){0, 0}, 180, 35, 1, WHITE);
+
+    
+    DrawTextEx(monocraft,  "^^ ^^ ^^", (Vector2){80, 360}, 25, 1, WHITE);
+    DrawTextPro(monocraft, "^^ ^^ ^^", (Vector2){185.7, 426}, (Vector2){0, 0}, 180, 25, 1, WHITE);
+    
+    drawButton(&jumpButton);
+
+
+    
+    time_t timestamp = (time_t)(selectedSeconds);
+    
+    struct tm *info = gmtime(&timestamp);
+    char *months[] = {
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    };
+
+    int numberDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    char *monthName = months[info->tm_mon];
+    int day = info->tm_mday;
+    int year = info->tm_year + 1900;
+    int hour = info->tm_hour;
+    int minute = info->tm_min;
+    int second = info->tm_sec;
+
+    char part1Date[128];
+    char part2Date[128];
+    
+    snprintf(part1Date, 128, "%s %02d, %d", monthName, day, year);
+    snprintf(part2Date, 128, "%02d:%02d:%02d UTC", hour, minute, second);
+    
+    DrawTextPro(monocraft, part1Date, (Vector2){40, 280}, (Vector2){0, 0}, 0, 35, 1, WHITE);
+    DrawTextPro(monocraft, part2Date, (Vector2){80, 380}, (Vector2){0, 0}, 0, 25, 1, WHITE);
+
+    
+    LittleButton arrows[26];
+
+    arrows[0] = (LittleButton){(Rectangle){57, 263, 16, 15}, 24*60*60 * (int)numberDays[info->tm_mon]};
+    arrows[1] = (LittleButton){(Rectangle){114, 263, 15, 15}, 24*60*60*10};
+    arrows[2] = (LittleButton){(Rectangle){133, 263, 15, 15}, 24*60*60};
+    arrows[3] = (LittleButton){(Rectangle){188, 263, 15, 15}, (int64_t)(365.2422 * 1000 * 24*60*60)};
+    arrows[4] = (LittleButton){(Rectangle){207, 263, 15, 15}, (int64_t)(365.2422 * 100 * 24*60*60)};
+    arrows[5] = (LittleButton){(Rectangle){226, 263, 15, 15}, (int64_t)(365.2422 * 10 * 24*60*60)};
+    arrows[6] = (LittleButton){(Rectangle){245, 263, 15, 15}, (int64_t)(((year%4 == 0) ? 366:365) * 24*60*60)};
+    arrows[7] = (LittleButton){(Rectangle){57, 320, 16, 15}, -24*60*60 * (int)numberDays[(info->tm_mon+11)%12]};
+    arrows[8] = (LittleButton){(Rectangle){114, 320, 15, 15}, -24*60*60*10};
+    arrows[9] = (LittleButton){(Rectangle){133, 320, 15, 15}, -24*60*60};
+    arrows[10] = (LittleButton){(Rectangle){188, 320, 15, 15}, -(int64_t)(365.2422 * 1000 * 24*60*60)};
+    arrows[11] = (LittleButton){(Rectangle){207, 320, 15, 15}, -(int64_t)(365.2422 * 100 * 24*60*60)};
+    arrows[12] = (LittleButton){(Rectangle){226, 320, 15, 15}, -(int64_t)(365.2422 * 10 * 24*60*60)};
+    arrows[13] = (LittleButton){(Rectangle){245, 320, 15, 15}, -(int64_t)(((year%4 == 0) ? 366:365) * 24*60*60)};
+    arrows[14] = (LittleButton){(Rectangle){80, 363, 10, 10}, 12*60*60};
+    arrows[15] = (LittleButton){(Rectangle){94, 363, 10, 10}, 60*60};
+    arrows[16] = (LittleButton){(Rectangle){120, 363, 10, 10}, 60*10};
+    arrows[17] = (LittleButton){(Rectangle){134, 363, 10, 10}, 60};
+    arrows[18] = (LittleButton){(Rectangle){160, 363, 10, 10}, 10};
+    arrows[19] = (LittleButton){(Rectangle){175, 363, 10, 10}, 1};
+    arrows[20] = (LittleButton){(Rectangle){80, 412, 10, 10}, -12*60*60};
+    arrows[21] = (LittleButton){(Rectangle){94, 412, 10, 10}, -60*60};
+    arrows[22] = (LittleButton){(Rectangle){120, 412, 10, 10}, -60*10};
+    arrows[23] = (LittleButton){(Rectangle){134, 412, 10, 10}, -60};
+    arrows[24] = (LittleButton){(Rectangle){160, 412, 10, 10}, -10};
+    arrows[25] = (LittleButton){(Rectangle){175, 412, 10, 10}, -1};
+
+
+    for (int i = 0; i < 26; i++) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), arrows[i].rect)) {
+            selectedSeconds += arrows[i].add;
+        }
+    }
+
+
+}
+
+
 
 int main() {
     
@@ -1349,13 +1456,14 @@ int main() {
     
     framesTicked = 0;
     elapsedSeconds = dateSeconds;
+    selectedSeconds = (double)time(NULL);
     seconds1000Years = 1000.0 * 365.25 * 24.0 * 60.0 * 60.0;    
     epsilon = 0.004;
     planetgoingTo = 0;
     celestialNum = 9;
     minRadius = 8;
     
-    char date[100];
+    
     char rateString[128];
     
     double firstDTmin = -60*60*24*36.5; //-10years per sec
@@ -1520,6 +1628,8 @@ int main() {
         
         if (options) setOptions();
         else support3 = (Rectangle){0, 0, 0, 0};
+
+        if (calendarToggle) calendarUI();
         DrawTextPro(monocraft, date, (Vector2){20, 10}, (Vector2){0, 0}, 0, 30, 1, WHITE);
         
         
