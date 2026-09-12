@@ -1196,7 +1196,7 @@ void buttons() {
         options = false;   
         planetsUI = false; 
         calendarToggle = false;
-    } if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), periodButton.inside)) {
+    } if (options && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), periodButton.inside)) {
         planetRotation = !planetRotation;
     }
 
@@ -1354,19 +1354,118 @@ void setOptions() {
 }
 
 void teleportPlanets(Planet *planet[]) {
-    for (int i = 1; i <= celestialNum   ; i++) {
-        
-        double dx, dy;
-        dx = planet[i]->pos.x - sun.pos.x;
-        dy = planet[i]->pos.y - sun.pos.y;
-        sun.gravitationalParameter = sun.mass * G;
 
-        
-        planet[i]->r = sqrt(dx*dx+dy*dy);
-        
+    /*
+    To understanf the orbital mechanichs watch:
+    https://www.youtube.com/watch?v=mU3txda9qYw
 
+    */
+   
+    for (int i = 1; i <= celestialNum; i++) {
+        
+        //time 
+        double t0 = elapsedSeconds;
+        double t = goToSeconds-t0;
 
+        //position and distance
+        double r0, x0, y0;
+        x0 = planet[i]->pos.x - sun.pos.x;
+        y0 = planet[i]->pos.y - sun.pos.y;
+        r0 = sqrtf(x0*x0+y0*y0);
+
+        //net velocity and velocity xy
+        double v0, vx0, vy0;
+        vx0 = planet[i]->velocity.x;
+        vy0 = planet[i]->velocity.y;
+        v0 = sqrtf(vx0*vx0+vy0*vy0);
+
+        //gravitational parameter
+        double μ = sun.mass * G;
+
+        //specific angular momentum
+        double h = x0*vy0 - y0*vx0;
+
+        //semi-latus rectum
+        double p = (h*h)/μ;
+
+        //semi-major axis
+        double a = 1/((2/r0)-((v0*v0)/μ));
+
+        //eccentricty vector
+        double rdotv = x0*vx0 + y0*vy0;               
+        double ex = (v0*v0/μ - 1.0/r0)*x0 - (rdotv/μ)*vx0;
+        double ey = (v0*v0/μ - 1.0/r0)*y0 - (rdotv/μ)*vy0;
+        double e  = sqrt(ex*ex + ey*ey);
+
+        //true anamoly at epoch
+        double nu0, cosNu0, sinNu0;
+        cosNu0 = (ex*x0 + ey*y0) / (e*r0);
+        sinNu0 = (ex*y0 - ey*x0) / (e*r0);
+        nu0 = atan2(sinNu0, cosNu0);
+
+        //eccentricity anamoly at epoch
+        double E0, cosE0, sinE0;
+        cosE0 = (e+cos(nu0))/(1+e*cos(nu0));
+        sinE0 = (sqrtf(1-e*e)*sin(nu0)) / (1 + e*cos(nu0));
+        E0 = atan2(sinE0, cosE0);
+
+        // mean anamoly at epoch
+        double M0;
+        M0 = E0 - e*sin(E0);
+
+        //mean motion
+        double n = sqrtf(μ/(a*a*a));
+
+        //mean anamoly at time T
+        double M = fmod(M0 + n*t, 2.0 * PI);
+        if (M < 0) M += 2.0 * M_PI;
+
+        //Solve for eccentricty anamoly at time t by iterating a lot of times, Newton-Raphson
+        double E = M;
+        for (int j = 0; j <= 20; j++) {
+            double dE = (E - e*sin(E) - M) / (1.0 - e*cos(E));
+            E -= dE;
+            if (fabs(dE) < 1e-12) break;
+        }
+
+        //true anamoly at time t
+        double nu, cosNu, sinNu;
+        cosNu = (cos(E)- e) / (1 - e*cos(E));
+        sinNu = (sqrtf(1-e*e)*sin(E))/(1-e*cos(E));
+        nu = atan2(sinNu, cosNu);
+
+        //radius at time t
+        double r = a*(1-e*cos(E));
+
+        //postion at time t
+        double x_orb, y_orb;
+        x_orb = r * cos(nu);
+        y_orb = r * sin(nu);
+
+        double omega = atan2(ey, ex);   // angle of the eccentricity vector
+        double x = x_orb * cos(omega) - y_orb * sin(omega);
+        double y = x_orb * sin(omega) + y_orb * cos(omega);
+
+        //velocity at time t
+        double vx_orb, vy_orb;
+        vx_orb = -sqrtf(μ/p) * sin(nu);
+        vy_orb = sqrtf(μ/p) * (e+cos(nu));
+
+        double vx = vx_orb * cos(omega) - vy_orb * sin(omega);
+        double vy = vx_orb * sin(omega) + vy_orb * cos(omega);
+
+        //results
+        planet[i]->pos.x     = sun.pos.x + x;
+        planet[i]->pos.y     = sun.pos.y + y;
+        planet[i]->velocity.x = vx;
+        planet[i]->velocity.y = vy;
+
+        //draw cordinates
+        planet[i]->drawPos.x = planet[i]->pos.x * zoomFactor + SCREEN_HALF_X;
+        planet[i]->drawPos.y = planet[i]->pos.y * zoomFactor + SCREEN_HALF_Y;
+        
     }
+    movePlanet(celestialBodies);
 }
 
 void calendarUI() {
@@ -1454,8 +1553,8 @@ void calendarUI() {
 
     goToSeconds = selectedSeconds - 954079200LL+6703200.250000;
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), jumpButton.inside)) {
-        elapsedSeconds = goToSeconds;
         teleportPlanets(celestialBodies);
+        elapsedSeconds = goToSeconds;
     }
 }
 
