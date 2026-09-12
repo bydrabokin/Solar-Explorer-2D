@@ -23,7 +23,7 @@ double DT = 0.01;
 double zoomFactorInit;
 double zoomFactor, minRadius;
 double elapsedSeconds, seconds1000Years;
-int64_t selectedSeconds;
+int64_t selectedSeconds, goToSeconds;
 int celestialNum, targetFps;
 int started;
 int numPoints;
@@ -76,7 +76,7 @@ typedef struct  {
     double axialTilt, inclination;
     double averageDistance;
     double escapeVelocity, escapeVelocityPlanet, netVelocity;
-    double r;
+    double r, angle;
     double blackBodyEquilibrium, bondAlbedo, solarIrradiance;
     double hillSphereRadius, sphereOfInfluenceRadius;
     double orbitalPeriod, orbitalVelocity;
@@ -88,6 +88,8 @@ typedef struct  {
     double rocheLimit;
     double estimatedAtmosphericScaleHeight, temperature, meanMolarMass;
     double radius; //m
+    double sintrueAnamoly, costrueAnamoly, trueAnamoly, eccentrictyAnamoly, currentMeanAnomaly;
+    double meanMotion;
     
     char name[32];
     Color color;
@@ -571,7 +573,7 @@ void setInitialPos(Planet *planet[]) {
         planet[i]->velocity.x = planet[i]->initialRadialVelocity * cosf(planet[i]->initialAngle*DEG2RAD) - planet[i]->initialTangentialVelocity * sinf(planet[i]->initialAngle*DEG2RAD);
         planet[i]->velocity.y = planet[i]->initialRadialVelocity * sinf(planet[i]->initialAngle*DEG2RAD) + planet[i]->initialTangentialVelocity * cosf(planet[i]->initialAngle*DEG2RAD);
         
-        printf("%s: V: %f, Vx: %f, Vy: %f, Tangential V: %f, Radial V: %f Distance: %f, Degrees: %f\n", planet[i]->name, sqrtf(planet[i]->velocity.x * planet[i]->velocity.x + planet[i]->velocity.y * planet[i]->velocity.y), planet[i]->velocity.x, planet[i]->velocity.y, planet[i]->initialTangentialVelocity, planet[i]->initialRadialVelocity, planet[i]->initialDistance, planet[i]->initialAngle);
+        //printf("%s: V: %f, Vx: %f, Vy: %f, Tangential V: %f, Radial V: %f Distance: %f, Degrees: %f\n", planet[i]->name, sqrtf(planet[i]->velocity.x * planet[i]->velocity.x + planet[i]->velocity.y * planet[i]->velocity.y), planet[i]->velocity.x, planet[i]->velocity.y, planet[i]->initialTangentialVelocity, planet[i]->initialRadialVelocity, planet[i]->initialDistance, planet[i]->initialAngle);
     }
 }
 
@@ -596,7 +598,7 @@ void drawPlanet(Planet *planet[], Font font) {
         DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){planet[i]->drawPos.x - planet[i]->drawRadius, planet[i]->drawPos.y - planet[i]->drawRadius, 2*planet[i]->drawRadius, 2*planet[i]->drawRadius}, (Vector2){planet[i]->drawRadius, planet[i]->drawRadius}, degrees, RAYWHITE);
         
         if (planet[i]->drawRadius < 10) {
-            DrawTextPro(font, planet[i]->name, (Vector2){planet[i]->drawPos.x-(int)(strlen(planet[i]->name) *4), planet[i]->drawPos.y-25}, (Vector2){0, 0}, 0, 15, 1, WHITE);
+            DrawTextPro(font, planet[i]->name, (Vector2){planet[i]->drawPos.x-(int)(strlen(planet[i]->name) *4)-planet[i]->drawRadius, planet[i]->drawPos.y-25}, (Vector2){0, 0}, 0, 15, 1, WHITE);
         }
     }
 }
@@ -1250,7 +1252,6 @@ void teleport() {
         if (zoomFactor != 1e-9 && moved == false) {
             if (round(zoomFactor*1e10) == 10) {
                 double value = zoomFactor / 1e-9;
-                //adjust(celestialBodies, value);
                 zoomFactor = 1e-9;
             }
             else if (zoomFactor > 1e-9) {
@@ -1352,6 +1353,22 @@ void setOptions() {
     
 }
 
+void teleportPlanets(Planet *planet[]) {
+    for (int i = 1; i <= celestialNum   ; i++) {
+        
+        double dx, dy;
+        dx = planet[i]->pos.x - sun.pos.x;
+        dy = planet[i]->pos.y - sun.pos.y;
+        sun.gravitationalParameter = sun.mass * G;
+
+        
+        planet[i]->r = sqrt(dx*dx+dy*dy);
+        
+
+
+    }
+}
+
 void calendarUI() {
 
     support3 = (Rectangle){-300, 115, 685, 435};
@@ -1383,7 +1400,7 @@ void calendarUI() {
     
     char *monthName = months[info->tm_mon];
     int day = info->tm_mday;
-    int year = info->tm_year + 1900;
+    int year = info->tm_year + 930;
     int hour = info->tm_hour;
     int minute = info->tm_min;
     int second = info->tm_sec;
@@ -1391,11 +1408,12 @@ void calendarUI() {
     char part1Date[128];
     char part2Date[128];
     
-    snprintf(part1Date, 128, "%s %02d, %d", monthName, day, year);
+    snprintf(part1Date, 128, "%s %02d, %04d", monthName, day, year+970);
     snprintf(part2Date, 128, "%02d:%02d:%02d UTC", hour, minute, second);
     
     DrawTextPro(monocraft, part1Date, (Vector2){40, 280}, (Vector2){0, 0}, 0, 35, 1, WHITE);
     DrawTextPro(monocraft, part2Date, (Vector2){80, 380}, (Vector2){0, 0}, 0, 25, 1, WHITE);
+    
 
     
     LittleButton arrows[26];
@@ -1406,14 +1424,14 @@ void calendarUI() {
     arrows[3] = (LittleButton){(Rectangle){188, 263, 15, 15}, (int64_t)(365.2422 * 1000 * 24*60*60)};
     arrows[4] = (LittleButton){(Rectangle){207, 263, 15, 15}, (int64_t)(365.2422 * 100 * 24*60*60)};
     arrows[5] = (LittleButton){(Rectangle){226, 263, 15, 15}, (int64_t)(365.2422 * 10 * 24*60*60)};
-    arrows[6] = (LittleButton){(Rectangle){245, 263, 15, 15}, (int64_t)(((year%4 == 0) ? 366:365) * 24*60*60)};
+    arrows[6] = (LittleButton){(Rectangle){245, 263, 15, 15}, (int64_t)((((year+970)%4 == 3) ? 366:365) * 24*60*60)};
     arrows[7] = (LittleButton){(Rectangle){57, 320, 16, 15}, -24*60*60 * (int)numberDays[(info->tm_mon+11)%12]};
     arrows[8] = (LittleButton){(Rectangle){114, 320, 15, 15}, -24*60*60*10};
     arrows[9] = (LittleButton){(Rectangle){133, 320, 15, 15}, -24*60*60};
     arrows[10] = (LittleButton){(Rectangle){188, 320, 15, 15}, -(int64_t)(365.2422 * 1000 * 24*60*60)};
     arrows[11] = (LittleButton){(Rectangle){207, 320, 15, 15}, -(int64_t)(365.2422 * 100 * 24*60*60)};
     arrows[12] = (LittleButton){(Rectangle){226, 320, 15, 15}, -(int64_t)(365.2422 * 10 * 24*60*60)};
-    arrows[13] = (LittleButton){(Rectangle){245, 320, 15, 15}, -(int64_t)(((year%4 == 0) ? 366:365) * 24*60*60)};
+    arrows[13] = (LittleButton){(Rectangle){245, 320, 15, 15}, -(int64_t)((((year+970)%4 == 0) ? 366:365) * 24*60*60)};
     arrows[14] = (LittleButton){(Rectangle){80, 363, 10, 10}, 12*60*60};
     arrows[15] = (LittleButton){(Rectangle){94, 363, 10, 10}, 60*60};
     arrows[16] = (LittleButton){(Rectangle){120, 363, 10, 10}, 60*10};
@@ -1434,7 +1452,11 @@ void calendarUI() {
         }
     }
 
-
+    goToSeconds = selectedSeconds - 954079200LL+6703200.250000;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), jumpButton.inside)) {
+        elapsedSeconds = goToSeconds;
+        teleportPlanets(celestialBodies);
+    }
 }
 
 
@@ -1491,8 +1513,11 @@ int main() {
     
     setInitialPos(celestialBodies);
 
-
     
+    deltaWorld.x += sun.drawRadius/zoomFactor;
+    deltaWorld.y += sun.drawRadius/zoomFactor;
+    movePlanet(celestialBodies);
+
     //run app
     while (!WindowShouldClose()) {
         
