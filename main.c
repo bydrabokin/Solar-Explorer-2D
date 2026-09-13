@@ -1,3 +1,30 @@
+/*
+ * Solar Explorer 2D
+ * ------------------------
+ * An interactive 2D Solar System observer built with C and raylib.
+ *
+ * Features:
+ *  - Real-time planetary motion simulation
+ *  - Adjustable simulation time and time-warp controls
+ *  - Planet selection and information panels
+ *  - Orbital and physical property calculations
+ *  - Planetary orbit visualization
+ *  - Camera movement and zoom
+ *  - Date-based navigation through the simulation
+ *
+ * The project is designed as the 2D foundation for a future
+ * 3D Solar System observer with more advanced numerical
+ * integration, moons, spacecraft, and additional celestial bodies.
+ *
+ * Built with:
+ *  - C
+ *  - raylib
+ *
+ * Author: bydrabokin
+ * Email: bydrabokin1755@proton.me
+ */
+
+
 #include <stdio.h>
 #include <raylib.h>
 #include <math.h>
@@ -6,20 +33,20 @@
 #include <stdint.h>
 #define SCREEN_HALF_X 900
 #define SCREEN_HALF_Y 450
-#define AU 1.496e+11
+#define AU 1.496e+11 //in meters
 #define G 6.6743e-11
 #define LuminositySun 3.828e26
-#define StefanBoltzmannConstant 5.670374e-8
-#define R 8.314
-#define rocheLimitConstant 2.44
-#define dateSeconds 6696000
+#define StefanBoltzmannConstant 5.670374e-8 //the thermal energy radiated from a blackbody surface
+#define R 8.314 //Universal Gas Constant
+#define rocheLimitConstant 2.44 //Fluid-body constant
+#define dateSeconds 6696000 //current date
 
 Texture2D raptor, calendarIcon, solarSystem, sunTexture, sunWeather, sunText, mercuryTexture, mercuryWeather, mercuryText, venusTexture, venusWeather, venusText, earthTexture, earthWeather, earthText, marsTexture, marsWeather, marsText, jupiterTexture, jupiterWeather, jupiterText, saturnTexture, saturnWeather, saturnText, uranusTexture, uranusWeather, uranusText, neptuneTexture, neptuneWeather, neptuneText, plutoTexture, plutoWeather, plutoText;
 Font monocraft, timesNewRoman;
 Color blue1, blue2, red1, red2, orange1, orange2, purple1, purple2, green1, green2, verydarkgray, darkRed, drakGreen, red, green, blue, lightBlue;
 bool orbiting, mousePressed, options, calendarToggle, planetsUI, moved, only, orbitsToggle, rocketToggle, planetRotation;
 
-double DT = 0.01;
+double DT;
 double zoomFactorInit;
 double zoomFactor, minRadius;
 double elapsedSeconds, seconds1000Years;
@@ -76,7 +103,7 @@ typedef struct  {
     double axialTilt, inclination;
     double averageDistance;
     double escapeVelocity, escapeVelocityPlanet, netVelocity;
-    double r, angle;
+    double r;
     double blackBodyEquilibrium, bondAlbedo, solarIrradiance;
     double hillSphereRadius, sphereOfInfluenceRadius;
     double orbitalPeriod, orbitalVelocity;
@@ -88,8 +115,6 @@ typedef struct  {
     double rocheLimit;
     double estimatedAtmosphericScaleHeight, temperature, meanMolarMass;
     double radius; //m
-    double sintrueAnamoly, costrueAnamoly, trueAnamoly, eccentrictyAnamoly, currentMeanAnomaly;
-    double meanMotion;
     
     char name[32];
     Color color;
@@ -124,9 +149,12 @@ typedef struct {
 
 void manageSlider(Slider *theslider) {
 
-    if (theslider == &epsilonSlider && !orbitsToggle) return;
+
+    //controls and draws the slider
+    if (theslider == &epsilonSlider && !orbitsToggle) return; //if no orbist them no slider for controlling the orbits
     else if (orbitsToggle) DrawTextPro(monocraft, "*May cause lag at low numbers", (Vector2){20, 350}, (Vector2){0, 0}, 0, 15, 1, GRAY);
 
+    //logartimc sliders (e.j epsilon)
     if (theslider->log) theslider->blue.width = (log(*theslider->affects) - log(theslider->min)) / (log(theslider->max) - log(theslider->min)) * theslider->gray.width;
     else theslider->blue.width = (*theslider->affects - theslider->min) / (theslider->max - theslider->min) * theslider->gray.width;
     
@@ -140,6 +168,7 @@ void manageSlider(Slider *theslider) {
     snprintf(value, 32, "%.4g", *theslider->affects);
     DrawTextEx(timesNewRoman, value, (Vector2){theslider->textRect.x+theslider->extra, theslider->textRect.y}, 30, 1, WHITE);
 
+    //if clicked
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointCircle(GetMousePosition(), theslider->ball, theslider->radius+5)) {
         theslider->ball.x = GetMousePosition().x;
         
@@ -563,13 +592,16 @@ void setSliders() {
 
 void setInitialPos(Planet *planet[]) {
     for (int i = 0; i <= celestialNum; i++) {
+
+        //calculate postion in xy based on polar cordinates
         planet[i]->pos.x = cosf(planet[i]->initialAngle * DEG2RAD) * planet[i]->initialDistance;
         planet[i]->pos.y = sinf(planet[i]->initialAngle * DEG2RAD) * planet[i]->initialDistance;
         planet[i]->drawPos.x = planet[i]->pos.x * zoomFactor + SCREEN_HALF_X;
         planet[i]->drawPos.y = planet[i]->pos.y * zoomFactor + SCREEN_HALF_Y;
         planet[i]->drawRadius = planet[i]->radius * zoomFactor;
         
-        planet[i]->initialTangentialVelocity *= -1;
+        //calculate vx and vy based on tangential and radial velocities
+        planet[i]->initialTangentialVelocity *= -1; //screen cordinates are flipped around
         planet[i]->velocity.x = planet[i]->initialRadialVelocity * cosf(planet[i]->initialAngle*DEG2RAD) - planet[i]->initialTangentialVelocity * sinf(planet[i]->initialAngle*DEG2RAD);
         planet[i]->velocity.y = planet[i]->initialRadialVelocity * sinf(planet[i]->initialAngle*DEG2RAD) + planet[i]->initialTangentialVelocity * cosf(planet[i]->initialAngle*DEG2RAD);
         
@@ -587,16 +619,19 @@ void movePlanet(Planet *planet[]) {
 
 void drawPlanet(Planet *planet[], Font font) {
 
+    
     for (int i = 0; i <= celestialNum; i++) {
         
         int degrees = (planetRotation) ? (int)(elapsedSeconds / planet[i]->rotationPeriod * 360.0+90) % 360 : 0;        
-        if (planet[i]->drawRadius < minRadius)  {
-            DrawCircle(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius-1, BLACK);
-            DrawCircleLines(planet[i]->drawPos.x-planet[i]->drawRadius, planet[i]->drawPos.y-planet[i]->drawRadius, minRadius, planet[i]->color);
+        if (planet[i]->drawRadius < minRadius)  { //if the planet is too snmall to see
+            DrawCircle(planet[i]->drawPos.x, planet[i]->drawPos.y, minRadius-1, BLACK); //background
+            DrawCircleLines(planet[i]->drawPos.x-planet[i]->drawRadius, planet[i]->drawPos.y-planet[i]->drawRadius, minRadius, planet[i]->color); //outside circle
         }
 
+        
         DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){planet[i]->drawPos.x - planet[i]->drawRadius, planet[i]->drawPos.y - planet[i]->drawRadius, 2*planet[i]->drawRadius, 2*planet[i]->drawRadius}, (Vector2){planet[i]->drawRadius, planet[i]->drawRadius}, degrees, RAYWHITE);
         
+        //print planet's name
         if (planet[i]->drawRadius < 10) {
             DrawTextPro(font, planet[i]->name, (Vector2){planet[i]->drawPos.x-(int)(strlen(planet[i]->name) *4)-planet[i]->drawRadius, planet[i]->drawPos.y-25}, (Vector2){0, 0}, 0, 15, 1, WHITE);
         }
@@ -604,6 +639,8 @@ void drawPlanet(Planet *planet[], Font font) {
 }
 
 void adjust(Planet *planet[], double coef) {
+
+    //move planets wheen zooming
     for (int i = 0; i <= celestialNum; i++) {
         planet[i]->drawPos.x = (planet[i]->drawPos.x - SCREEN_HALF_X) * coef + SCREEN_HALF_X;
         planet[i]->drawPos.y = (planet[i]->drawPos.y - SCREEN_HALF_Y) * coef + SCREEN_HALF_Y;
@@ -614,28 +651,33 @@ void adjust(Planet *planet[], double coef) {
 }
 
 void applyGravity(Planet *planet[]) {
+    
+    //all the magic is done here
     double dx, dy, r, gravF, a, ax, ay;
     
     for (int i = 1; i <= celestialNum; i++) {
+
+        //distance
         dx = planet[i]->pos.x;
         dy = planet[i]->pos.y;
 
         r = sqrtf(dx*dx+ dy*dy);
         
+        //force by the universal law of gravitation
         gravF = G * ((planet[i]->mass * sun.mass) / (r*r));
         
+        // a = f/m
         a = gravF / planet[i]->mass;
 
         ax = -a * (dx/r);
         ay = -a * (dy/r);
         
+        //implict euler integration, numerical error is substantial, rk4 would have been better
         planet[i]->velocity.x += ax * DT;
         planet[i]->velocity.y += ay * DT;
         
         planet[i]->pos.y += planet[i]->velocity.y * DT;
         planet[i]->pos.x += planet[i]->velocity.x * DT;
-        
-
         
         planet[i]->drawPos.x += planet[i]->velocity.x * DT * zoomFactor;
         planet[i]->drawPos.y += planet[i]->velocity.y * DT * zoomFactor;
@@ -644,12 +686,15 @@ void applyGravity(Planet *planet[]) {
 }
 
 void getDate(double DT, int frames, char *date) {
+
+    //gets the date based on seconds pase with the handy time. library
     if (orbiting && framesTicked%11 == 0) {
     
     elapsedSeconds += frames * DT;
     time_t timestamp = (time_t)(elapsedSeconds+seconds1000Years);
 
     struct tm *info = gmtime(&timestamp);
+    
     char *months[] = {
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
         "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
@@ -658,7 +703,7 @@ void getDate(double DT, int frames, char *date) {
     
     char *monthName = months[info->tm_mon];
     int day = info->tm_mday;
-    int year = info->tm_year + 930;
+    int year = info->tm_year + 930; 
     int hour = info->tm_hour;
     int minute = info->tm_min;
     int second = info->tm_sec;
@@ -670,7 +715,9 @@ void getDate(double DT, int frames, char *date) {
 }
 
 void getRate(double DT, char *rate, bool orbiting) {
-    double realDT  = fabs(DT*100);
+    //gets the rate of change string
+    
+    double realDT  = fabs(DT*targetFps);
 
     int seocndsInMinute = 60;
     int secondsInHour = seocndsInMinute * 60;
@@ -710,6 +757,9 @@ void getRate(double DT, char *rate, bool orbiting) {
 
 double jumpRate(double DT, bool direction) {
     
+    //input is DT and direction and it outputs the next DT
+
+    //predefined DT milestones 
     double jumps[] = {-31536000, -1576800, -630720, -315360, -77760, -25920, -12096, -6048, 
         -864, -432, -144, -72, -36, -18, -6, -3, -1.8, 
                     0.01, 1.8, 3, 6, 18, 36, 72, 144, 432, 864, 
@@ -776,10 +826,16 @@ void drawButton(Button *button) {
 
 void infoPlanets(Planet *planet[], Font font, Font font2) {
 
+
+    //welcome to the big function
+    //it displays all the stuff you see in the right when clicking a planet
+
+    //cross
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){1710, 20, 40, 40})) {
         planetSelected = 0;
     }
 
+    //clicking a planet
     for (int i = 0; i <= celestialNum; i++) {
         int radius = (planet[i]->drawRadius > 5) ?  planet[i]->drawRadius : 5;
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointCircle(GetMousePosition(), (Vector2)planet[i]->drawPos, radius)) {
@@ -789,28 +845,39 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
     
     
     int i = planetSelected -1;
-    
-    int j =planetSelected-1;
 
     
     if (i != -1) {
+
+        //semi-transparent background
         Rectangle support = {1300, 0, 1000, 900};
         DrawRectangleRounded((Rectangle)support, 0.3, 50, (Color){0, 0, 0, 160});
         
+        //Name of the planet
         DrawTextPro(font, planet[i]->name, (Vector2){1500, 25}, (Vector2){0, 0}, 0, 45, 1, WHITE);
+
+        //Top-right cross
         DrawLineEx((Vector2){1730, 40}, (Vector2){1750, 60}, 2, GRAY);
         DrawLineEx((Vector2){1730, 60}, (Vector2){1750, 40}, 2, GRAY);
+
+        //Planet
         DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){1350, 100, 100, (int)(100.0 / planet[i]->texture.width * planet[i]->texture.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
+        
+        //Planet descritpion (saved as an image beacuse im too lazy to hard code all of that)
         DrawTexturePro(planet[i]->text, (Rectangle){0, 0, planet[i]->text.width, planet[i]->text.height}, (Rectangle){1470, 100, 300, (int)(300.0 / planet[i]->text.width * planet[i]->text.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);    
+        
         DrawTextPro(font, "Planet Data:", (Vector2){1350, 260}, (Vector2){0, 0}, 0, 45, 1, WHITE);
         
+
+        //values strings
+
         //physical properties
         char massString[64];
         char radiusString[64];
         char meanDensityString[64];
         char surfaceGravityString[64];
         char rotationPeriodString[64];
-        char axialTiltString[64];
+        char axialTiltString[64];  //inclination of the planet
         char averageDistanceString[64];
         
             
@@ -818,73 +885,72 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
         char escapeVelocityString[64];
         char speedString[64];
         char distanceFromSunString[64];
-        char eccentricityString[64];
-        char semiMajorAxisString[64];
-        char semiMinorAxisString[64];
-        char perihelionString[64];
-        char aphelionString[64];
-        char inclinationString[64];
+        char eccentricityString[64];  //if eccentricticity is o the it is a perfect circle
+        char semiMajorAxisString[64]; //half of the long diametre
+        char semiMinorAxisString[64]; //half of the long diametre
+        char perihelionString[64]; // closest point
+        char aphelionString[64];  //farthest point
+        char inclinationString[64];  //orbit inclination
         char gravitationalParameterString[64];
-        char specificOrbitalEnergyString[64];
-        char radialVelocityString[64];
-        char tangentialVelocityString[64];
-        char orbitalperiodString[64];
+        char specificOrbitalEnergyString[64];  //should stay the same (guess what, becaus of semi-implicit euler numeral integration method it doesn't)
+        char radialVelocityString[64]; //veloctity away form the sun
+        char tangentialVelocityString[64]; //velocity perpendicular to the sun
+        char orbitalperiodString[64]; //a year
         
         //Derived Values
-        char solarirradianceString[64];
-        char blackbodyequilibriumtemperatureString[64];
-        char hillsphereradiusString[64];
-        char sphereofinfluenceString[64];
-        char rochelimitString[64];
-        char estimatedatmosphericscaleheightString[64];
+        char solarirradianceString[64]; //power per m² receved
+        char blackbodyequilibriumtemperatureString[64]; //tenperature a perfect black body will be in when the radiation it receives equal the radiation it emits
+        char hillsphereradiusString[64]; //the region where athe body's gravitational pull dominates over the sun's
+        char sphereofinfluenceString[64]; //gravitational boundary where the planet theoritically has more power on you, the difference between the hill sphere radius is that this one changes (I believe so)
+        char rochelimitString[64]; //The minimum distance the planet could be before it start getting disassembled by the sun's gravity
+        char estimatedatmosphericscaleheightString[64]; //Height at which the atmosphere density decrease by a factor of e
+        //relative to earth
         char velocityRelativeEarth[64];
         char gravityCompString[64];
         char yearCompString[64];
         char dayCompString[64];
-        
-
                 
+        //draw los botones
         drawButton(&orbitalProperties);
         drawButton(&derivedValues);
         drawButton(&physicalProperties);
         drawButton(&atmosphericProperties);
         
-        //global
+        //global values (needed for stuff outside this function)
         sun.density = sun.mass / (4.0/3.0 *PI*sun.radius*sun.radius*sun.radius);
         sun.gravitationalParameter =  G * sun.mass;
         earth.surfaceGravity = G * earth.mass / ((double)earth.radius * earth.radius);
-
-        
         
         double dx, dy;
-        dx = planet[j]->pos.x - sun.pos.x;
-        dy = planet[j]->pos.y - sun.pos.y; 
-        planet[j]->r = sqrtf(dx*dx + dy*dy);
-    
+        dx = planet[i]->pos.x - sun.pos.x;
+        dy = planet[i]->pos.y - sun.pos.y; 
+        planet[i]->r = sqrtf(dx*dx + dy*dy);
         
-        planet[j]->gravitationalParameter = G * planet[j]->mass;
-        planet[j]->netVelocity = sqrt(planet[j]->velocity.x*planet[j]->velocity.x+planet[j]->velocity.y*planet[j]->velocity.y);
-        planet[j]->specificOrbitalEnergy = ((planet[j]->netVelocity*planet[j]->netVelocity)/2) - (sun.gravitationalParameter / planet[j]->r);
-        planet[j]->semiMajorAxis = -sun.gravitationalParameter /  (2*planet[j]->specificOrbitalEnergy);
-        planet[j]->angularMomentum = dx * planet[j]->velocity.y - dy * planet[j]->velocity.x;
-        planet[j]->eccentricity = sqrtf(1+((2*planet[j]->specificOrbitalEnergy*planet[j]->angularMomentum*planet[j]->angularMomentum)/(sun.gravitationalParameter*sun.gravitationalParameter)));
-        planet[j]->density = planet[j]->mass / (4.0/3.0 *PI*planet[j]->radius*planet[j]->radius*planet[j]->radius);
-        planet[j]->surfaceGravity = G * planet[j]->mass / ((double)planet[j]->radius * planet[j]->radius);
-        planet[j]->orbitalPeriod = 2 * PI * sqrtf((planet[j]->semiMajorAxis*planet[j]->semiMajorAxis*planet[j]->semiMajorAxis)/sun.gravitationalParameter);
-        planet[j]->escapeVelocity = sqrtf((2*G*sun.mass)/planet[j]->r);
+        planet[i]->gravitationalParameter = G * planet[i]->mass;
+        planet[i]->netVelocity = sqrt(planet[i]->velocity.x*planet[i]->velocity.x+planet[i]->velocity.y*planet[i]->velocity.y);
+        planet[i]->specificOrbitalEnergy = ((planet[i]->netVelocity*planet[i]->netVelocity)/2) - (sun.gravitationalParameter / planet[i]->r);
+        planet[i]->semiMajorAxis = -sun.gravitationalParameter /  (2*planet[i]->specificOrbitalEnergy);
+        planet[i]->angularMomentum = dx * planet[i]->velocity.y - dy * planet[i]->velocity.x;
+        planet[i]->eccentricity = sqrtf(1+((2*planet[i]->specificOrbitalEnergy*planet[i]->angularMomentum*planet[i]->angularMomentum)/(sun.gravitationalParameter*sun.gravitationalParameter)));
+        planet[i]->density = planet[i]->mass / (4.0/3.0 *PI*planet[i]->radius*planet[i]->radius*planet[i]->radius);
+        planet[i]->surfaceGravity = G * planet[i]->mass / ((double)planet[i]->radius * planet[i]->radius);
+        planet[i]->orbitalPeriod = 2 * PI * sqrtf((planet[i]->semiMajorAxis*planet[i]->semiMajorAxis*planet[i]->semiMajorAxis)/sun.gravitationalParameter);
+        planet[i]->escapeVelocity = sqrtf((2*G*sun.mass)/planet[i]->r);
+
+
 
         if (physicalProperties.on) {
             
-            planet[j]->escapeVelocityPlanet = sqrtf((2*G*planet[j]->mass)/planet[j]->radius);
-            snprintf(massString, 64, "Mass: %g kg", planet[j]->mass);
-            snprintf(radiusString, 64, "Radius: %.0f m", planet[j]->radius);
-            snprintf(meanDensityString, 64, "Mean Density: %.2f kg/m^3",planet[j]->density);
-            snprintf(surfaceGravityString, 64, "Surface Gravity: %.2f m/s^2",planet[j]->surfaceGravity);
-            snprintf(rotationPeriodString, 64, "Rotation Period: %.2f h",planet[j]->rotationPeriod/3600);
-            snprintf(axialTiltString, 64, "Axial Tilt: %.2f degrees",planet[j]->axialTilt);
-            snprintf(averageDistanceString, 64, "Average Distance: %.2f AU",planet[j]->averageDistance/AU);
-            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[j]->escapeVelocityPlanet/1000.0);
-            snprintf(gravitationalParameterString, 64, "Gravitational Parameter: %.2e", planet[j]->gravitationalParameter);            
+            planet[i]->escapeVelocityPlanet = sqrtf((2*G*planet[i]->mass)/planet[i]->radius);
+            snprintf(massString, 64, "Mass: %g kg", planet[i]->mass);
+            snprintf(radiusString, 64, "Radius: %.0f m", planet[i]->radius);
+            snprintf(meanDensityString, 64, "Mean Density: %.2f kg/m^3",planet[i]->density);
+            snprintf(surfaceGravityString, 64, "Surface Gravity: %.2f m/s^2",planet[i]->surfaceGravity);
+            snprintf(rotationPeriodString, 64, "Rotation Period: %.2f h",planet[i]->rotationPeriod/3600);
+            snprintf(axialTiltString, 64, "Axial Tilt: %.2f degrees",planet[i]->axialTilt);
+            snprintf(averageDistanceString, 64, "Average Distance: %.2f AU",planet[i]->averageDistance/AU);
+            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[i]->escapeVelocityPlanet/1000.0);
+            snprintf(gravitationalParameterString, 64, "Gravitational Parameter: %.2e", planet[i]->gravitationalParameter);            
 
 
             
@@ -905,40 +971,40 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
         
         else if (derivedValues.on) {
 
-            planet[j]->blackBodyEquilibrium = powf((LuminositySun*(1-planet[j]->bondAlbedo))/(16*PI*StefanBoltzmannConstant*planet[j]->r*planet[j]->r), 0.25);
-            planet[j]->solarIrradiance = LuminositySun/(4*PI*planet[j]->r*planet[j]->r);
-            planet[j]->hillSphereRadius = planet[j]->semiMajorAxis*cbrt(planet[j]->mass/(3.0*sun.mass));
-            planet[j]->sphereOfInfluenceRadius = planet[j]->semiMajorAxis * powf(planet[j]->mass/sun.mass, 2.0/5.0);
-            planet[j]->rocheLimit = rocheLimitConstant * sun.radius * pow(sun.density / planet[j]->density, 1.0 / 3.0);            
-            planet[j]->estimatedAtmosphericScaleHeight = (R * planet[j]->temperature) / (planet[j]->meanMolarMass * planet[j]->surfaceGravity);
-            double velocityRelativeEarthValue = sqrtf((planet[j]->velocity.x - earth.velocity.x)*(planet[j]->velocity.x - earth.velocity.x) + (planet[j]->velocity.y - earth.velocity.y)*(planet[j]->velocity.y - earth.velocity.y)) / 1000.0;
-            double gravityPercent = planet[j]->surfaceGravity / earth.surfaceGravity*100;
-            double yearComp = planet[j]->orbitalPeriod / earth.orbitalPeriod / 3600 / 365;
-            double dayComp = fabs(planet[j]->rotationPeriod/3600.0/24.0) / (earth.rotationPeriod/3600.0/24.0);
+            planet[i]->blackBodyEquilibrium = powf((LuminositySun*(1-planet[i]->bondAlbedo))/(16*PI*StefanBoltzmannConstant*planet[i]->r*planet[i]->r), 0.25);
+            planet[i]->solarIrradiance = LuminositySun/(4*PI*planet[i]->r*planet[i]->r);
+            planet[i]->hillSphereRadius = planet[i]->semiMajorAxis*cbrt(planet[i]->mass/(3.0*sun.mass));
+            planet[i]->sphereOfInfluenceRadius = planet[i]->semiMajorAxis * powf(planet[i]->mass/sun.mass, 2.0/5.0);
+            planet[i]->rocheLimit = rocheLimitConstant * sun.radius * pow(sun.density / planet[i]->density, 1.0 / 3.0);            
+            planet[i]->estimatedAtmosphericScaleHeight = (R * planet[i]->temperature) / (planet[i]->meanMolarMass * planet[i]->surfaceGravity);
+            double velocityRelativeEarthValue = sqrtf((planet[i]->velocity.x - earth.velocity.x)*(planet[i]->velocity.x - earth.velocity.x) + (planet[i]->velocity.y - earth.velocity.y)*(planet[i]->velocity.y - earth.velocity.y)) / 1000.0;
+            double gravityPercent = planet[i]->surfaceGravity / earth.surfaceGravity*100;
+            double yearComp = planet[i]->orbitalPeriod / earth.orbitalPeriod / 3600 / 365;
+            double dayComp = fabs(planet[i]->rotationPeriod/3600.0/24.0) / (earth.rotationPeriod/3600.0/24.0);
             
 
-            snprintf(blackbodyequilibriumtemperatureString, 64, "BB Equilibrium Temp: %.2f K", planet[j]->blackBodyEquilibrium);
-            snprintf(solarirradianceString, 64, "Solar Irradiance: %.2f W/m^2",planet[j]->solarIrradiance);
-            snprintf(hillsphereradiusString, 64, "Hill's Sphere: %.2e m",planet[j]->hillSphereRadius);
-            snprintf(sphereofinfluenceString, 64, "Sphere of Influnce: %.2e m",planet[j]->sphereOfInfluenceRadius);
-            snprintf(rochelimitString, 64, "Roche limit: %.3g AU",planet[j]->rocheLimit / AU);
-            snprintf(estimatedatmosphericscaleheightString, 64, "Est. Atm. Height: %.2f km",planet[j]->estimatedAtmosphericScaleHeight/1000.0);
+            snprintf(blackbodyequilibriumtemperatureString, 64, "BB Equilibrium Temp: %.2f K", planet[i]->blackBodyEquilibrium);
+            snprintf(solarirradianceString, 64, "Solar Irradiance: %.2f W/m^2",planet[i]->solarIrradiance);
+            snprintf(hillsphereradiusString, 64, "Hill's Sphere: %.2e m",planet[i]->hillSphereRadius);
+            snprintf(sphereofinfluenceString, 64, "Sphere of Influnce: %.2e m",planet[i]->sphereOfInfluenceRadius);
+            snprintf(rochelimitString, 64, "Roche limit: %.3g AU",planet[i]->rocheLimit / AU);
+            snprintf(estimatedatmosphericscaleheightString, 64, "Est. Atm. Height: %.2f km",planet[i]->estimatedAtmosphericScaleHeight/1000.0);
             snprintf(velocityRelativeEarth, 64, "Velocity: %.2f km/s",velocityRelativeEarthValue);
             snprintf(gravityCompString, 64, "Gravity: %.2f%% as earth's", gravityPercent);
-            snprintf(yearCompString, 64, "Year: %.2f earth years", planet[j]->orbitalPeriod / earth.orbitalPeriod);
+            snprintf(yearCompString, 64, "Year: %.2f earth years", planet[i]->orbitalPeriod / earth.orbitalPeriod);
             snprintf(dayCompString, 64, "Day: %.2f earth days", dayComp);
             
             
 
 
 
-            if (planet[j] == &sun) {
+            if (planet[i] == &sun) {
                 snprintf(blackbodyequilibriumtemperatureString, 64, "Effective Temp: 5772 K");
                 snprintf(hillsphereradiusString, 64, "Hill's Sphere: N/A");
                 snprintf(sphereofinfluenceString, 64, "Sphere of Influnce: N/A");
                 snprintf(rochelimitString, 64, "Roche limit: N/A");
-                planet[j]->solarIrradiance = LuminositySun/(4*PI*planet[j]->radius*planet[j]->radius);
-                snprintf(solarirradianceString, 64, "Solar Flux: %.2f W/m^2",planet[j]->solarIrradiance);
+                planet[i]->solarIrradiance = LuminositySun/(4*PI*planet[i]->radius*planet[i]->radius);
+                snprintf(solarirradianceString, 64, "Solar Flux: %.2f W/m^2",planet[i]->solarIrradiance);
             }
 
             DrawTextPro(font2, blackbodyequilibriumtemperatureString, (Vector2){1350, 490}, (Vector2){0, 0}, 0, 25, 1, WHITE);
@@ -957,28 +1023,28 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
         }
         
         else if (orbitalProperties.on) {
-            planet[j]->semiMinorAxis = planet[j]->semiMajorAxis * sqrtf(1 - planet[j]->eccentricity*planet[j]->eccentricity);
-            planet[j]->perihelion = planet[j]->semiMajorAxis * (1 - planet[j]->eccentricity);
-            planet[j]->aphelion = planet[j]->semiMajorAxis * (1 + planet[j]->eccentricity);
-            planet[j]->radialVelocity = (dx * planet[j]->velocity.x + dy * planet[j]->velocity.y) / planet[j]->r;
-            planet[j]->tangentialVelocity = fabs(dx*planet[j]->velocity.y- dy*planet[j]->velocity.x) / planet[j]->r;
+            planet[i]->semiMinorAxis = planet[i]->semiMajorAxis * sqrtf(1 - planet[i]->eccentricity*planet[i]->eccentricity);
+            planet[i]->perihelion = planet[i]->semiMajorAxis * (1 - planet[i]->eccentricity);
+            planet[i]->aphelion = planet[i]->semiMajorAxis * (1 + planet[i]->eccentricity);
+            planet[i]->radialVelocity = (dx * planet[i]->velocity.x + dy * planet[i]->velocity.y) / planet[i]->r;
+            planet[i]->tangentialVelocity = fabs(dx*planet[i]->velocity.y- dy*planet[i]->velocity.x) / planet[i]->r;
             
-            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[j]->escapeVelocity/1000.0);
-            snprintf(speedString, 64, "Velocity: %.2f km/s", planet[j]->netVelocity /1000.0);            
-            snprintf(distanceFromSunString, 64, "Distance from Sun: %.2f AU", planet[j]->r / AU);
-            snprintf(inclinationString, 64, "Inclination: %.2f degrees", planet[j]->inclination);
-            snprintf(eccentricityString, 64, "Eccentricty: %.3f", planet[j]->eccentricity);
-            snprintf(semiMajorAxisString, 64, "Semi-Major Axis: %.2f AU", planet[j]->semiMajorAxis/AU);
-            snprintf(semiMinorAxisString, 64, "Semi-Minor Axis: %.2f AU", planet[j]->semiMinorAxis/AU);
-            snprintf(aphelionString, 64, "Aphelion: %.2f AU", planet[j]->aphelion / AU);
-            snprintf(perihelionString, 64, "Perihelion: %.2f AU", planet[j]->perihelion / AU);
+            snprintf(escapeVelocityString, 64, "Escape Velocity: %.2f km/s", planet[i]->escapeVelocity/1000.0);
+            snprintf(speedString, 64, "Velocity: %.2f km/s", planet[i]->netVelocity /1000.0);            
+            snprintf(distanceFromSunString, 64, "Distance from Sun: %.2f AU", planet[i]->r / AU);
+            snprintf(inclinationString, 64, "Inclination: %.2f degrees", planet[i]->inclination);
+            snprintf(eccentricityString, 64, "Eccentricty: %.3f", planet[i]->eccentricity);
+            snprintf(semiMajorAxisString, 64, "Semi-Major Axis: %.2f AU", planet[i]->semiMajorAxis/AU);
+            snprintf(semiMinorAxisString, 64, "Semi-Minor Axis: %.2f AU", planet[i]->semiMinorAxis/AU);
+            snprintf(aphelionString, 64, "Aphelion: %.2f AU", planet[i]->aphelion / AU);
+            snprintf(perihelionString, 64, "Perihelion: %.2f AU", planet[i]->perihelion / AU);
             snprintf(gravitationalParameterString, 64, "Gravitational Parameter: %.2e", sun.gravitationalParameter);            
-            snprintf(specificOrbitalEnergyString, 64, "Orbital Energy: %.2e j/kg", planet[j]->specificOrbitalEnergy);
-            snprintf(radialVelocityString, 64, "Radial Velocity: %.2f km/s", planet[j]->radialVelocity/1000.0);
-            snprintf(tangentialVelocityString, 64, "Tangetial Velocity: %.2f km/s", planet[j]->tangentialVelocity/1000.0);
-            snprintf(orbitalperiodString, 64, "Orbital Period: %.2f days", planet[j]->orbitalPeriod/3600/24);
+            snprintf(specificOrbitalEnergyString, 64, "Orbital Energy: %.2e j/kg", planet[i]->specificOrbitalEnergy);
+            snprintf(radialVelocityString, 64, "Radial Velocity: %.2f km/s", planet[i]->radialVelocity/1000.0);
+            snprintf(tangentialVelocityString, 64, "Tangetial Velocity: %.2f km/s", planet[i]->tangentialVelocity/1000.0);
+            snprintf(orbitalperiodString, 64, "Orbital Period: %.2f days", planet[i]->orbitalPeriod/3600/24);
 
-            if (planet[j] == &sun) {
+            if (planet[i] == &sun) {
                 snprintf(escapeVelocityString, 64, "Escape Velocity: N/A");
                 snprintf(speedString, 64, "Velocity: N/A");
                 snprintf(distanceFromSunString, 64, "Distance from Sun: N/A");
@@ -1016,6 +1082,16 @@ void infoPlanets(Planet *planet[], Font font, Font font2) {
 }
 
 void orbitTrails(Planet *planet[]) {
+    
+    //generate the orbit trails
+
+    /* 
+    This function works by going around the orbit in increments of the theta and calculating the distance of that angle
+    a.k.a the polar cordinates
+    By using this formula   r = (a(1-e²)) / (1 + e*cos(theta-omega))
+    Then save those points
+    */
+
     int point;
     double ω, h, r, μ;
     double ex, ey;
@@ -1030,9 +1106,13 @@ void orbitTrails(Planet *planet[]) {
 
         r = sqrt(x*x+y*y);
 
+        //angular momentum
         h = x*vy - y*vx;
+
+        //gravitational parameter
         μ = G * sun.mass;
 
+        //same thing as in teleportPlanets(), we use this formulas to get the angle of the eccentricty vector
         ex = (vy * h) / μ - x / r;
         ey = -(vx * h) / μ - y / r;
 
@@ -1048,6 +1128,7 @@ void orbitTrails(Planet *planet[]) {
 
         planet[i]->r = sqrtf(dx*dx + dy*dy);
 
+        //handy orbital mechanics formulas
         planet[i]->gravitationalParameter = G * planet[i]->mass;
         planet[i]->netVelocity = sqrt(planet[i]->velocity.x*planet[i]->velocity.x+planet[i]->velocity.y*planet[i]->velocity.y);
         planet[i]->specificOrbitalEnergy = ((planet[i]->netVelocity*planet[i]->netVelocity)/2) - (sun.gravitationalParameter / planet[i]->r);
@@ -1057,12 +1138,14 @@ void orbitTrails(Planet *planet[]) {
         
         for (double θ = 0; θ <= 2*PI; θ+= epsilon) {
 
-
+            //formula
             double distance = (planet[i]->semiMajorAxis * (1-planet[i]->eccentricity*planet[i]->eccentricity)) / (1+planet[i]->eccentricity*cos(θ-ω));
+            
+            //x, y points
             Vector2 cordinates = {cos(θ)*distance, sin(θ)*distance};
-            orbits[i][point] = (Vector2)cordinates;
+            orbits[i][point] = (Vector2)cordinates; //save them
 
-                
+            //save the screen crdinates counterparts
             orbitsDraw[i][point].x = (orbits[i][point].x+deltaWorld.x) * zoomFactor + SCREEN_HALF_X;
             orbitsDraw[i][point].y = (orbits[i][point].y+deltaWorld.y) * zoomFactor + SCREEN_HALF_Y ;
             
@@ -1072,6 +1155,8 @@ void orbitTrails(Planet *planet[]) {
 }
 
 void drawOrbitTrails() {
+
+    //draw them based on epsilon (space between the points)
     int point = 0;
 
     for (int i = 1; i <= celestialNum; i++) {
@@ -1084,6 +1169,8 @@ void drawOrbitTrails() {
 }
 
 void applyEscapeVelocity(Planet *planet) {
+
+    //just apply it with newton's formula v = sqrt(2GM/r)
 
     double dx, dy;
     dx = planet->pos.x - sun.pos.x;
@@ -1101,6 +1188,7 @@ void applyEscapeVelocity(Planet *planet) {
 
 void planetSelection(Planet *planet[]) {
     
+    //The planet selection window and apply escape velocity window, reusing function baby!
     support3 = (Rectangle){-300, 130, 670, 660};
     DrawRectangleRounded((Rectangle)support3, 0.6, 50, (Color){0, 0, 0, 160});
     
@@ -1114,12 +1202,16 @@ void planetSelection(Planet *planet[]) {
 
     int start = (rocketToggle) ? 1:0;
 
+    //display all bodies
     for (int i = start; i <= celestialNum; i++) {
+        
         int row = (i-start)%3;
         int column = (i-start)/3;
-
+        
+        //draw planet
         DrawTexturePro(planet[i]->texture, (Rectangle){0, 0, planet[i]->texture.width, planet[i]->texture.height}, (Rectangle){25+row*100, 270+120*column, 75, (int)(75.0 / planet[i]->texture.width * planet[i]->texture.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
         
+        //extra space for certain long planet's names
         int extra = 0;
         if (planet[i] == &sun) extra = 10;
         else if (planet[i] == &venus) extra = 5;
@@ -1129,7 +1221,7 @@ void planetSelection(Planet *planet[]) {
 
         DrawTextEx(monocraft, planet[i]->name, (Vector2){40+row*100 + extra, 350+120*column}, 15, 1, WHITE);
 
-    
+        //if cliked        
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){25+row*100, 270+120*column, 75, 75})) {
             if (planetsUI) { 
                 planetSelected = i+1;
@@ -1141,6 +1233,7 @@ void planetSelection(Planet *planet[]) {
         } 
     }
 
+    //if planet selection UI need to add 2 extra buttons
     if (planetsUI) {
 
         DrawTexturePro(solarSystem, (Rectangle){0, 0, solarSystem.width, solarSystem.height}, (Rectangle){125, 630, 75, (int)(75.0 / solarSystem.width * solarSystem.height)}, (Vector2){0, 0}, 0.0, RAYWHITE);        
@@ -1162,6 +1255,9 @@ void planetSelection(Planet *planet[]) {
 }
 
 void buttons() {
+
+    //handles button logic
+
     pauseButton = (Rectangle){880, 780, 40, 25};
     previousButton = (Rectangle){810, 777, 50, 30};
     nextButton = (Rectangle){940, 777, 50, 30};
@@ -1183,7 +1279,7 @@ void buttons() {
         rocketToggle = false;
 
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), orbitTrailsButton.inside)) {
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), orbitTrailsButton.inside) && options) {
         orbitsToggle = !orbitsToggle;  
 
     } if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), calendarButton)) {
@@ -1245,10 +1341,24 @@ void buttons() {
 
 void teleport() {
 
+    //Welcome to the messiest function in the world
+
+    /*
     
+    It goes to the planet selected in 3 phases: 
+    
+    1. Zooms in or out to the original zoom
+    2. Moves evrything until the planet is on the center
+    3. Zooms in until the palnets radius is around 200 pixels
+
+    */
+
+
     if (planetgoingTo != 0) {
         double diffX = celestialBodies[planetgoingTo-1]->drawPos.x - celestialBodies[planetgoingTo-1]->drawRadius - SCREEN_HALF_X;
         double diffY = celestialBodies[planetgoingTo-1]->drawPos.y - celestialBodies[planetgoingTo-1]->drawRadius - SCREEN_HALF_Y;
+        
+        //phase 1
         if (zoomFactor != 1e-9 && moved == false) {
             if (round(zoomFactor*1e10) == 10) {
                 double value = zoomFactor / 1e-9;
@@ -1262,6 +1372,7 @@ void teleport() {
                 adjust(celestialBodies, 1.05);
             }
 
+        //phase 2
         } else if ((fabs(diffX) > 0.05 || fabs(diffY) > 0.05) && !moved) {
             Vector2 delta = {fmax(-5.0, fmin(5.0, -diffX)), fmax(-5.0, fmin(5.0, -diffY))};
 
@@ -1270,6 +1381,7 @@ void teleport() {
 
             movePlanet(celestialBodies);
 
+        //phase 3
         } else if (celestialBodies[planetgoingTo-1] == &pluto ? (pluto.drawRadius < 100 || pluto.drawRadius > 300) : (celestialBodies[planetgoingTo-1]->drawRadius < 200 || celestialBodies[planetgoingTo-1]->drawRadius > 300)) {
             if (!only) {
 
@@ -1290,6 +1402,8 @@ void teleport() {
                 planetgoingTo = 0;
                 moved = false;
             }
+
+        //if finished
         } else {
             planetgoingTo = 0;
             moved = false;
@@ -1299,7 +1413,9 @@ void teleport() {
 }
 
 void generateSliderFunct() {
-    //Points SLider
+
+    //the line in the main DT slider is giverned by the equation: y = -0.0007x² + 850
+    //Points Slider
     cursorPos = (Vector2){900, 0};
 
     numPoints = 0;
@@ -1335,6 +1451,7 @@ void setColors() {
 
 void setOptions() {
     
+    //draws everything in the options section
     DrawTextPro(monocraft, "*Click a planet to follow/zoom in", (Vector2){20, 852}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     DrawTextPro(monocraft, "*Press R to restart", (Vector2){20, 867}, (Vector2){0, 0}, 0, 15, 1, GRAY);
     DrawTextPro(monocraft, "*Press SPACE to pause simulation", (Vector2){20, 882}, (Vector2){0, 0}, 0, 15, 1, GRAY);
@@ -1355,12 +1472,37 @@ void setOptions() {
 
 void teleportPlanets(Planet *planet[]) {
 
+    //warps to a certain amount of seconds
+    
     /*
-    To understanf the orbital mechanichs watch:
+    To understand the orbital mecanichs watch:
     https://www.youtube.com/watch?v=mU3txda9qYw
 
+    I'll try and explain it nevertheless;
+    The goal is to find the position, and velocity in polar cordinates of the planets in t
+    For that we need to do a certain translation between 'units'
+    t -> M -> E -> Nu -> (r, theta) -> (x, y)
+
+    From seoonds (t) we can get the Mean anamoly which is a handy way of represinting where we are in the orbit but not the actual position,
+    it is useful because it changes with linearly with time.
+
+    Form that we can get the Eccentricty anamoly by doing the kepler's equation with the Newton-Raphson method: M=E−esinE
+
+    We need the True Anamoly which is a differnt angle that describes basically the same thing, see line +84. which gives us sin(Nu) and cos(Nu)
+    From that we just get Nu,
+
+    We use E to get the distance: a*(1-e*cos(E));
+    And Nu for the x, y position 
+
+    This gives us the orbital postions of the planets but we need to translate them into our set of refernce by using the angle of eccentricty vector
+    Same stuff for velocity
+
+    And finally we just apply them and translate them into draw cordinates
     */
-   
+
+
+
+
     for (int i = 1; i <= celestialNum; i++) {
         
         //time 
@@ -1470,6 +1612,7 @@ void teleportPlanets(Planet *planet[]) {
 
 void calendarUI() {
 
+    //handles all of the UI for the calendar section and gives the time at which to warp to
     support3 = (Rectangle){-300, 115, 685, 435};
     DrawRectangleRounded((Rectangle)support3, 0.4, 50, (Color){0, 0, 0, 160});
     
@@ -1558,6 +1701,123 @@ void calendarUI() {
     }
 }
 
+void input() {
+
+    //pausing
+    if (IsKeyPressed(KEY_SPACE) || (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle)pauseButton))) {
+            orbiting = !orbiting;
+    }
+
+    //restarting
+    if (IsKeyPressed(KEY_R)) {
+        zoomFactor = 1e-9;
+        setInitialData();
+        setInitialPos(celestialBodies);
+            
+        DT = 0.01;
+        orbiting = true;
+        elapsedSeconds = dateSeconds;
+        getDate(DT, 11, date);
+        orbiting = false;
+        
+        cursorPos.x = 900;
+        deltaWorld = (Vector2){0, 0};
+    }  
+
+    //zoom
+    if (GetMouseWheelMove() == 1.0 && zoomFactor < 1e-3) {
+        zoomFactor *= 1.2;
+        adjust(celestialBodies, 1.2);
+    } else if (GetMouseWheelMove() == -1.0) {
+        zoomFactor *= 0.8;
+        adjust(celestialBodies, 0.8);
+    }
+
+
+    //moving around
+
+    //check if pressed
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        mousePressed = true;
+    }
+
+
+    if (mousePressed && !IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        mousePressed = false;
+        if (cursorPos.x == 900) DT = 0.01; //if exacltly in the middle
+
+    } else if (mousePressed) {
+        //same height as mouse for main slider
+        cursorPos.y = GetMousePosition().y;
+
+        if (!CheckCollisionPointRec(GetMousePosition(), (Rectangle)support2) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support3) ) {
+            //move everything
+            deltaWorld.x += GetMouseDelta().x / zoomFactor;
+            deltaWorld.y += GetMouseDelta().y / zoomFactor;
+            movePlanet(celestialBodies);
+        } else if (CheckCollisionPointCircle(GetMousePosition(), (Vector2)cursorPos, 22.5)) {
+            
+            //main slider
+            cursorPos.x += GetMouseDelta().x;
+            cursorPos.y = GetMousePosition().y;
+            
+            //limits
+            if (cursorPos.x < 600) cursorPos.x = 600;
+            if (cursorPos.x > 1200) cursorPos.x = 1200;
+            
+        }
+    }     
+    
+    //translating cursor.x to DT
+    if (cursorPos.x < 900) {
+        double t = (cursorPos.x - 600.0f) / 300.0f;
+        DT = -powf(10.0f, log10f(-firstDTmin) * (1.0f - t));
+        getRate(DT, rateString, orbiting);
+    }
+    else if (cursorPos.x > 900) {
+        double t = (cursorPos.x - 900.0f) / 300.0f;
+        DT = powf(10.0f, log10f(-firstDTmin) * t);
+        getRate(DT, rateString, orbiting);
+    } else {
+        getRate(0.01, rateString, orbiting);
+    }
+
+    //differnt rounding because of there are more possible DT values than cursor.x values
+    if (DT < 100 && DT > -100) {
+        DT = round(DT*100) / 100;
+    } else if (DT < 30000 && DT > -30000) {
+        DT = round(DT);
+    } else if (DT < 30000000 && DT > -30000000) {
+        DT = round(DT/10)*10;
+    }        
+
+    //next and previous buttons
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT) ) {
+        if (CheckCollisionPointRec(GetMousePosition(), (Rectangle)nextButton) || IsKeyPressed(KEY_RIGHT)) {
+            DT = jumpRate(DT, true);
+        } else if (CheckCollisionPointRec(GetMousePosition(), (Rectangle)previousButton) || IsKeyPressed(KEY_LEFT)) {
+            DT = jumpRate(DT, false);
+        }
+
+        //translating DT to cursor.x
+        double L = log10f(-firstDTmin);
+        if (DT < -0.01f) {                      
+            double t = 1.0f - log10f(-DT) / L;
+            if (t < 0.0f) t = 0.0f;
+            else if (t > 1.0f) t = 1.0f;
+            cursorPos.x = 600.0f + t * 300.0f;
+        }
+        else if (DT > 0.01f) {                  
+            double t = log10f(DT) / L;
+            if (t < 0.0f) t = 0.0f;
+            else if (t > 1.0f) t = 1.0f;
+            cursorPos.x = 900.0f + t * 300.0f;
+        }
+        else {
+            cursorPos.x = 900.0f;   
+        }
+    } 
+}
 
 
 int main() {
@@ -1573,32 +1833,37 @@ int main() {
     rocketToggle = false;
     planetRotation = true;
 
+    //zoom
     zoomFactor = 1e-9;
     
+    //time
     framesTicked = 0;
     elapsedSeconds = dateSeconds;
     selectedSeconds = (double)time(NULL);
     seconds1000Years = 1000.0 * 365.25 * 24.0 * 60.0 * 60.0;    
+
+    //other values
     epsilon = 0.004;
-    planetgoingTo = 0;
     celestialNum = 9;
     minRadius = 8;
     
     
-    char rateString[128];
     
-    double firstDTmin = -60*60*24*36.5; //-10years per sec
-    double firstDTmax = 60*60*24*36.5; //10 years per sec
+    firstDTmin = -60*60*24*36.5; //-10years per sec
+    firstDTmax = 60*60*24*36.5; //10 years per sec
     
+    //Selection
     planetSelected = 0;
+    planetgoingTo = 0;
     started = 0;
     
+    //FPS
     targetFps = 100;
     SetTargetFPS(targetFps);
 
 
     //init app
-    InitWindow(1800, 900, "Solar System 2D 🪐");
+    InitWindow(1800, 900, "Solar Explorer 2D 🪐");
     
     //Start
     setColors();
@@ -1612,7 +1877,7 @@ int main() {
     
     setInitialPos(celestialBodies);
 
-    
+    //adjust for rotation
     deltaWorld.x += sun.drawRadius/zoomFactor;
     deltaWorld.y += sun.drawRadius/zoomFactor;
     movePlanet(celestialBodies);
@@ -1620,13 +1885,19 @@ int main() {
     //run app
     while (!WindowShouldClose()) {
         
+        //orbiting mode
         if (orbiting) {
             framesTicked++;
             applyGravity(celestialBodies);
         }
 
+
         getDate(DT, 11, date);
-        
+
+        //planet zoom
+        teleport();
+
+        //semi-transparent background for planet selection
         if (planetSelected == 0) {
             support = (Rectangle){1800, 0, 1000, 900};
         } else {
@@ -1636,129 +1907,44 @@ int main() {
         support2 = (Rectangle){580, 720, 640, 300};
         
         //Input
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT) ) {
-            if (CheckCollisionPointRec(GetMousePosition(), (Rectangle)nextButton) || IsKeyPressed(KEY_RIGHT)) {
-                DT = jumpRate(DT, true);
-            } else if (CheckCollisionPointRec(GetMousePosition(), (Rectangle)previousButton) || IsKeyPressed(KEY_LEFT)) {
-                DT = jumpRate(DT, false);
-            }
-            double L = log10f(-firstDTmin);
-            if (DT < -0.01f) {                      
-                double t = 1.0f - log10f(-DT) / L;
-                if (t < 0.0f) t = 0.0f;
-                else if (t > 1.0f) t = 1.0f;
-                cursorPos.x = 600.0f + t * 300.0f;
-            }
-            else if (DT > 0.01f) {                  
-                double t = log10f(DT) / L;
-                if (t < 0.0f) t = 0.0f;
-                else if (t > 1.0f) t = 1.0f;
-                cursorPos.x = 900.0f + t * 300.0f;
-            }
-            else {
-                cursorPos.x = 900.0f;   
-            }
-        } 
-        
-        if (IsKeyPressed(KEY_SPACE) || (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), (Rectangle)pauseButton))) {
-            orbiting = !orbiting;
-        }
-        if (IsKeyPressed(KEY_R)) {
-            zoomFactor = 1e-9;
-            setInitialData();
-            setInitialPos(celestialBodies);
-            
-            DT = 0.01;
-            orbiting = true;
-            elapsedSeconds = dateSeconds;
-            getDate(DT, 11, date);
-            orbiting = false;
-            
-            cursorPos.x = 900;
-            deltaWorld = (Vector2){0, 0};
-        }  
-        if (GetMouseWheelMove() == 1.0 && zoomFactor < 1e-3) {
-            zoomFactor *= 1.2;
-            adjust(celestialBodies, 1.2);
-        } else if (GetMouseWheelMove() == -1.0) {
-            zoomFactor *= 0.8;
-            adjust(celestialBodies, 0.8);
-        }
         
         
         
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            mousePressed = true;
-        }
-        if (mousePressed && !IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            mousePressed = false;
-            if (cursorPos.x == 900) DT = 0.01;
-
-        } else if (mousePressed) {
-            cursorPos.y = GetMousePosition().y;
-            if (!CheckCollisionPointRec(GetMousePosition(), (Rectangle)support2) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle)support3) ) {
-                deltaWorld.x += GetMouseDelta().x / zoomFactor;
-                deltaWorld.y += GetMouseDelta().y / zoomFactor;
-                movePlanet(celestialBodies);
-            } else if (CheckCollisionPointCircle(GetMousePosition(), (Vector2)cursorPos, 22.5)) {
-                cursorPos.x += GetMouseDelta().x;
-                cursorPos.y = GetMousePosition().y;
-                
-                
-                if (cursorPos.x < 600) cursorPos.x = 600;
-                if (cursorPos.x > 1200) cursorPos.x = 1200;
-                
-            }
-        }     
         
-        teleport();
-        if (cursorPos.x < 900) {
-            double t = (cursorPos.x - 600.0f) / 300.0f;
-            DT = -powf(10.0f, log10f(-firstDTmin) * (1.0f - t));
-            getRate(DT, rateString, orbiting);
-        }
-        else if (cursorPos.x > 900) {
-            double t = (cursorPos.x - 900.0f) / 300.0f;
-            DT = powf(10.0f, log10f(-firstDTmin) * t);
-            getRate(DT, rateString, orbiting);
-        } else {
-            getRate(0.01, rateString, orbiting);
-        }
-        if (DT < 100 && DT > -100) {
-            DT = round(DT*100) / 100;
-        } else if (DT < 30000 && DT > -30000) {
-            DT = round(DT);
-        } else if (DT < 30000000 && DT > -30000000) {
-            DT = round(DT/10)*10;
-        }        
-    
         
-
+        
+        
+        
+        input();
         
         //Drawing
         BeginDrawing();
         ClearBackground(BLACK);
         
+        //draw orbits
         if (orbitsToggle) {    
             orbitTrails(celestialBodies);
             drawOrbitTrails();
         }
 
+        //planets
         drawPlanet(celestialBodies, monocraft);
         
-        
-        char fps[16];
-        snprintf(fps, 16, "%d", GetFPS());
-        
-        if (options) setOptions();
-        else support3 = (Rectangle){0, 0, 0, 0};
 
+        if (options) setOptions();
+        else support3 = (Rectangle){0, 0, 0, 0}; // semi-transparent background to 0
+
+        
         if (calendarToggle) calendarUI();
+        
+        //draw the date
         DrawTextPro(monocraft, date, (Vector2){20, 10}, (Vector2){0, 0}, 0, 30, 1, WHITE);
         
-        
+        //semi-transparent background
         DrawRectangleRounded((Rectangle)support2, 0.8, 50, (Color){0, 0, 0, 200});
         infoPlanets(celestialBodies, timesNewRoman, monocraft);
+        
+        //Handle all logic and drawing of buttons
         buttons();        
         
         //slider
@@ -1771,6 +1957,7 @@ int main() {
         cursorPos.y = -0.0007 * (cursorPos.x - 900) * (cursorPos.x - 900) + 850;
         
         
+        //Input ball
         DrawCircle(cursorPos.x, cursorPos.y, 22.5, DARKGRAY);
         DrawCircle(cursorPos.x, cursorPos.y, 21, BLACK);
         DrawCircle(cursorPos.x, cursorPos.y, 16.5, DARKGRAY);
@@ -1778,12 +1965,13 @@ int main() {
         DrawCircle(cursorPos.x, cursorPos.y, 9, DARKGRAY);
 
         
-        
+        //Rocket selection
         if (planetsUI || rocketToggle) {
             planetSelection(celestialBodies);
         }
         
         
+        //all drawing of the main slider
         DrawTextPro(monocraft, rateString, (Vector2){815, 730}, (Vector2){0, 0}, 0, 30, 1, WHITE);
         
         if (orbiting) {
@@ -1808,6 +1996,9 @@ int main() {
 
         }
 
+        //fps
+        char fps[16];
+        snprintf(fps, 16, "%d", GetFPS());
         DrawText(fps, 1760, 860, 24, WHITE);
         
 
