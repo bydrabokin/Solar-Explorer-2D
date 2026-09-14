@@ -184,4 +184,4 @@ cd windows/
 
 Ignacio Martinez Heras · 2026
 
-Built along with the fascination to the solar system.
+Built along using a fascination to the solar system.
