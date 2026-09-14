@@ -52,7 +52,7 @@ with Kepler's equation solved numerically using Newton-Raphson.
 
 **Implicit Euler Numerical Integration**
 
-This simulation uses the implicit euler numerical integration, which produces substantial numerical error with time.
+This simulation uses the implicit euler numerical integration.
 It would have been better to use the *Runge-Kutta 4* or **RK4** as it is much more precise.
 
 # Known limitations
@@ -118,6 +118,13 @@ It would have been better to use the *Runge-Kutta 4* or **RK4** as it is much mo
 │   └── SolarExplorer2D
 ├── raylib/
 ├── README.md
+├── Screenshots
+│   ├── Solar-Explorer-2D_1.png
+│   ├── Solar-Explorer-2D_2.png
+│   ├── Solar-Explorer-2D_3.png
+│   ├── Solar-Explorer-2D_4.png
+│   ├── Solar-Explorer-2D_5.png
+│   └── Solar-Explorer-2D_6.png
 ├── src
 │   ├── assets
 │   │   ├── extra
