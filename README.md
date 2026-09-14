@@ -3,6 +3,8 @@
 A 2D solar system explorer sandbox that works as an encyclopedia of the solar system displaying information about planet's properties, atmospheres, orbits and much more. 
 Uses numerical solutions to calculate the orbits of planets at scale and represents them with data from NASA/JPL Solar System Dynamics and NASA NSSDCA Planetary Fact Sheets in the J2000 orientation system
 
+Showcase: https://www.youtube.com/watch?v=iz0MujAaYDQ
+
 # Why this exists
 It is a passion project and an introduction to a much larger 3D solar system that will include moons, spacecraft and many more features. 
 It emerges from a profound admiration to our solar system. The project tries to be a learning aid for anyone who is interested.
