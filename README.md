@@ -1,11 +1,11 @@
-# Solar Explorer 2D - A way to experince the best solar system
+# Solar Explorer 2D - A way to experience the best solar system
 
 A 2D solar system explorer sandbox that works as an encyclopedia of the solar system displaying information about planet's properties, atmospheres, orbits and much more. 
 Uses numerical solutions to calculate the orbits of planets at scale and represents them with data from NASA/JPL Solar System Dynamics and NASA NSSDCA Planetary Fact Sheets in the J2000 orientation system
 
 # Why this exists
 It is a passion project and an introduction to a much larger 3D solar system that will include moons, spacecraft and many more features. 
-It emerges from a profound admiration to our solar system. The project tries to be a tool for assitance to learning.
+It emerges from a profound admiration to our solar system. The project tries to be a learning aid for anyone who is interested.
 
 # The physics behind it
 
@@ -57,11 +57,10 @@ It would have been better to use the *Runge-Kutta 4* or **RK4** as it is much mo
 # Known limitations
 1. This simulation uses the implicit euler numerical integration, which produces substantial numerical error with time.
 It would have been better to use the *Runge-Kutta 4* or **RK4** as it is much more precise.
-2. The method used for numerical integration is not reliable and generates a big numerical error.
-3. The zoom-in-to-planet feature produces unexpected behaviour when the simulation isn't stopped
-4. Ineficient use of many textures for displaying text
-5. When selecting a date, the code that handles the change of years fails to account for leap years.
-6. The entirity of the project's code is nested in a single file with makes it very hard to modify and expand
+2. The zoom-in-to-planet feature produces unexpected behaviour when the simulation isn't stopped
+3. Inefficient use of many textures for displaying text
+4. When selecting a date, the code that handles the change of years fails to account for leap years.
+5. The entirety of the project's code is nested in a single file which makes it very hard to modify and expand
 
 # Repository structure
 
