@@ -8,7 +8,6 @@ It is a passion project and an introduction to a much larger 3D solar system tha
 It emerges from a profound admiration to our solar system. The project tries to be a tool for assitance to learning.
 
 # The physics behind it
-**Orbital Movement**
 
 The normal movement of celestial bodies is achived by calculating the force exercised on them from the sun by the universal law of gravitation:
 
@@ -93,6 +92,29 @@ $$
 
 
 **Implicit Euler Numerical Integration**
+This simulation uses the implicit euler numerical integration, which means that we:
+
+First calculate the distance between the planets.
+Then you calculate the force of gravity inserted on the moon. F = G * (m1 + m2) / r²
+You convert it to accelartion based on the moon's mass. F = ma
+You separate that acceleration into ax and ay based of the differnce of x and y as shown below:
+
+dx = planetx - starx.
+dy = planety - stary.
+
+ax = -a * (dx/r) // E.x which comest out to ~0.4.
+ay = -a ^(dy/r) // ~0.6.
+
+Note that the accelartion is negative beacuse it is towards the planet.
+
+Now you just apply the a to v:
+vx += ax * dt
+vy += ay * dt
+
+And to x and y:
+x += vx * dt
+y += vy * dt
+
 
 # Images
 
