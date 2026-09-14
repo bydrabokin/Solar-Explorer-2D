@@ -9,7 +9,8 @@ It emerges from a profound admiration to our solar system. The project tries to 
 
 # The physics behind it
 
-The normal movement of celestial bodies is achived by calculating the force exercised on them from the sun by the universal law of gravitation:
+The normal movement of celestial bodies is achived by calculating the force exercised on them from the sun by the universal law of gravitation: $F = \frac{GMm}{r^2}$.
+Below I list many formulas used to acquire those orbital parameters. There are more obsucure formulas used to get some cool derived values, see the infoPlanets() function in the source code for more information
 
 ## Physics & Orbital Mechanics
 
