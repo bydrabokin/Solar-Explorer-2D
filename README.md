@@ -140,12 +140,12 @@ It would have been better to use the *Runge-Kutta 4* or **RK4** as it is much mo
 ```
 
 # Images
-![1](Screenshoots/Solar-Explorer-2D_1.png)
-![2](Screenshoots/Solar-Explorer-2D_2.png)
-![3](Screenshoots/Solar-Explorer-2D_3.png)
-![4](Screenshoots/Solar-Explorer-2D_4.png)
-![5](Screenshoots/Solar-Explorer-2D_5.png)
-![6](Screenshoots/Solar-Explorer-2D_6.png)
+![1](Screenshots/Solar-Explorer-2D_1.png)
+![2](Screenshots/Solar-Explorer-2D_2.png)
+![3](Screenshots/Solar-Explorer-2D_3.png)
+![4](Screenshots/Solar-Explorer-2D_4.png)
+![5](Screenshots/Solar-Explorer-2D_5.png)
+![6](Screenshots/Solar-Explorer-2D_6.png)
 
 # Installation guide
 
